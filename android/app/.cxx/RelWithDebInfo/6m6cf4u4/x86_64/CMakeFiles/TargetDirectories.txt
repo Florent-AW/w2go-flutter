@@ -1,0 +1,2 @@
+D:/Dev/LYRA_App/travel_in_perigord_app/android/app/.cxx/RelWithDebInfo/6m6cf4u4/x86_64/CMakeFiles/edit_cache.dir
+D:/Dev/LYRA_App/travel_in_perigord_app/android/app/.cxx/RelWithDebInfo/6m6cf4u4/x86_64/CMakeFiles/rebuild_cache.dir

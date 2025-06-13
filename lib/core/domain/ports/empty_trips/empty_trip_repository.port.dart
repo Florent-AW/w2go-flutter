@@ -1,0 +1,1 @@
+// lib/core/domain/ports/empty_trips/empty_trip_repository.port.dart
