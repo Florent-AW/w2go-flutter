@@ -61,7 +61,8 @@ class ActivityRecommendationsSection extends ConsumerWidget {
             .toList();
 
         return GenericExperienceCarousel(
-          key: PageStorageKey('rec-similar-$activityId'), // ✅ SOLUTION C
+          // Utilise un ValueKey pour éviter que le state persiste entre les pages
+          key: ValueKey('rec-similar-$activityId'),
           title: ActivityRecommendationService.getSectionTitle('similar'),
           heroPrefix: 'rec-similar',
           experiences: experiences,
