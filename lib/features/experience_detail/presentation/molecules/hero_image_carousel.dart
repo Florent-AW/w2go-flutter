@@ -120,10 +120,10 @@ class _HeroImageCarouselState extends State<HeroImageCarousel> {
   /// ✅ 3. Slide protégée avec RepaintBoundary
   Widget _buildCarouselItem(int index) {
     final imageUrl = widget.imageUrls[index];
-    final isFirst = index == 0;
+    final isActive = index == _currentIndex;
 
     return RepaintBoundary(
-      child: isFirst
+      child: isActive
           ? HeroImage(
         tag: widget.heroTag,
         url: imageUrl,

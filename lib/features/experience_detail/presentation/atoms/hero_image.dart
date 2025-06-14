@@ -25,14 +25,28 @@ class HeroImage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Hero(
       tag: tag,
-      // ✅ EXPERT : flightShuttleBuilder avec CachingImageProvider
-      flightShuttleBuilder: (_, __, ___, ____, _____) => Image(
-        image: CachingImageProvider.of(url),
-        fit: fit,
-        gaplessPlayback: true,
-        width: width,
-        height: height,
-      ),
+      // ✅ EXPERT : flightShuttleBuilder avec transition en fondu
+      flightShuttleBuilder:
+          (flightContext, animation, flightDirection, fromHeroContext, toHeroContext) {
+        final fromHero = fromHeroContext.widget as Hero;
+        final toHero = toHeroContext.widget as Hero;
+
+        final fromWidget = fromHero.child;
+        final toWidget = toHero.child;
+
+        return AnimatedBuilder(
+          animation: animation,
+          builder: (context, child) {
+            return Stack(
+              fit: StackFit.passthrough,
+              children: [
+                Opacity(opacity: 1.0 - animation.value, child: fromWidget),
+                Opacity(opacity: animation.value, child: toWidget),
+              ],
+            );
+          },
+        );
+      },
       // ✅ EXPERT : placeholderBuilder avec même provider
       placeholderBuilder: (_, __, ___) => Image(
         image: CachingImageProvider.of(url),
