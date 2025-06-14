@@ -61,9 +61,9 @@ class ActivityRecommendationsSection extends ConsumerWidget {
             .toList();
 
         return GenericExperienceCarousel(
-          key: PageStorageKey('rec-similar-$activityId'), // ✅ SOLUTION C
+          key: ValueKey('rec-similar-$activityId'),
           title: ActivityRecommendationService.getSectionTitle('similar'),
-          heroPrefix: 'rec-similar',
+          heroPrefix: 'rec-similar-$activityId',
           experiences: experiences,
           isLoading: false,
           openBuilder: _buildUnifiedOpenBuilder(),
