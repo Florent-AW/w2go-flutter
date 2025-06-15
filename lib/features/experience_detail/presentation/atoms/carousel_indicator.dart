@@ -1,22 +1,23 @@
 // lib/features/experience_detail/presentation/atoms/carousel_indicator.dart
 
 import 'package:flutter/material.dart';
-import '../../../../core/theme/app_colors.dart';
 
 class CarouselIndicator extends StatelessWidget {
   final int currentIndex;
   final int itemCount;
-  final Color? textColor;
-  final Color? backgroundColor;
-  final EdgeInsets? padding;
+  final Color? activeColor;
+  final Color? inactiveColor;
+  final double dotSize;
+  final double spacing;
 
   const CarouselIndicator({
     Key? key,
     required this.currentIndex,
     required this.itemCount,
-    this.textColor,
-    this.backgroundColor,
-    this.padding,
+    this.activeColor,
+    this.inactiveColor,
+    this.dotSize = 8,
+    this.spacing = 4,
   }) : super(key: key);
 
   @override
@@ -25,22 +26,25 @@ class CarouselIndicator extends StatelessWidget {
     if (itemCount <= 1) return const SizedBox.shrink();
 
     // Index lisible par l'utilisateur (commençant à 1)
-    final int displayIndex = currentIndex + 1;
-
-    return Container(
-      padding: padding ?? const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: backgroundColor ?? Colors.black.withOpacity(0.4),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        '$displayIndex/$itemCount',
-        style: TextStyle(
-          color: textColor ?? Colors.white,
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color active = activeColor ?? Colors.white;
+    final Color inactive = inactiveColor ??
+        (isDark ? Colors.white38 : Colors.black26);
+    return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: List.generate(itemCount, (index) {
+      final bool isActive = index == currentIndex;
+      return AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        margin: EdgeInsets.symmetric(horizontal: spacing),
+        width: dotSize,
+        height: dotSize,
+        decoration: BoxDecoration(
+          color: isActive ? active : inactive,
+          shape: BoxShape.circle,
         ),
-      ),
+      );
+    }),
     );
   }
 }

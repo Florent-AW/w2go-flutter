@@ -60,10 +60,12 @@ class _HeroImageCarouselState extends State<HeroImageCarousel> {
   Widget _buildSingleHeroImage() {
     return SizedBox(
       height: widget.height,
+      width: double.infinity,
       child: HeroImage(
         tag: widget.heroTag,
         url: widget.imageUrls.first,
         fit: BoxFit.cover,
+        width: double.infinity,
       ),
     );
   }
