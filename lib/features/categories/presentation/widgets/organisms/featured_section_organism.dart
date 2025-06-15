@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:infinite_carousel/infinite_carousel.dart';
 import '../../../../../core/domain/models/shared/category_view_model.dart';
 import '../../../../../core/domain/models/activity/search/searchable_activity.dart';
+import '../../../../../core/domain/models/event/search/searchable_event.dart';
 import '../../../../../core/domain/models/shared/experience_item.dart';
 import '../../../../../core/theme/app_dimensions.dart';
 import '../../../../shared_ui/presentation/widgets/organisms/generic_experience_carousel.dart';
@@ -236,8 +237,12 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
         // ✅ Fallback legacy pour SearchableActivity (à supprimer progressivement)
         if (experience.isEvent) {
           print('Navigation vers événement: ${experience.name}');
-          action();
-          return Container();
+          return ExperienceDetailPage(
+            experienceItem: experience is ExperienceItem
+                ? experience
+                : ExperienceItem.event(experience as SearchableEvent),
+            onClose: action,
+          );
         } else {
           return widget.openBuilder!(context, action, experience.asActivity!);
         }

@@ -7,7 +7,9 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_dimensions.dart';
 import '../../../../../core/domain/models/shared/subcategory_model.dart';
 import '../../../../../core/domain/models/activity/search/searchable_activity.dart';
+import '../../../../../core/domain/models/event/search/searchable_event.dart';
 import '../../../../../core/domain/models/shared/experience_item.dart';
+import '../../../../experience_detail/presentation/pages/experience_detail_page.dart';
 import '../../../../../features/search/application/state/experience_providers.dart';
 import '../../../../../features/search/application/state/section_discovery_providers.dart';
 import '../../../../../features/search/application/state/city_selection_state.dart';
@@ -187,8 +189,12 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
                   ? (context, action, experience) {
                 if (experience.isEvent) {
                   print('Navigation vers événement: ${experience.name}');
-                  action();
-                  return Container();
+                  return ExperienceDetailPage(
+                    experienceItem: experience is ExperienceItem
+                        ? experience
+                        : ExperienceItem.event(experience as SearchableEvent),
+                    onClose: action,
+                  );
                 } else {
                   return widget.openBuilder!(context, action, experience.asActivity!);
                 }

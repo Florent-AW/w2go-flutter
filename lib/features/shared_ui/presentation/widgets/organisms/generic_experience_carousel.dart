@@ -237,7 +237,15 @@ class GenericExperienceCarousel extends ConsumerWidget {
 
                     if (experience.isEvent) {
                       print('📅 Navigation vers événement: ${experience.name}');
-                      // TODO: Navigation événement
+                      if (experience.asEvent != null) {
+                        NavigationUtils.navigateToEventDetail(
+                          context,
+                          event: experience.asEvent!,
+                          heroTag: heroTag,
+                        );
+                      } else {
+                        print('❌ CAROUSEL TAP: experience.asEvent est null !');
+                      }
                     } else {
                       print('🏛️ Navigation avec NavigationUtils classique');
                       NavigationUtils.navigateToActivityDetail(

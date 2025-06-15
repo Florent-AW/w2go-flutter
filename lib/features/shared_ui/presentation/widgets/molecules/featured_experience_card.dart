@@ -71,7 +71,15 @@ class _FeaturedExperienceCardState extends State<FeaturedExperienceCard>
 
             if (widget.experience.isEvent) {
               print('📅 CARD TAP: Navigation vers événement: ${widget.experience.name}');
-              // TODO: Navigation événement
+              if (widget.experience.asEvent != null) {
+                NavigationUtils.navigateToEventDetail(
+                  context,
+                  event: widget.experience.asEvent!,
+                  heroTag: widget.heroTag,
+                );
+              } else {
+                print('❌ CARD TAP: experience.asEvent est null !');
+              }
             } else {
               print('🏛️ CARD TAP: Navigation vers activité avec NavigationUtils');
 

@@ -5,6 +5,7 @@ import 'package:animations/animations.dart';
 import '../../../routes/route_names.dart';
 import '../../../routes/app_router.dart';
 import '../../domain/models/activity/search/searchable_activity.dart';
+import '../../domain/models/event/search/searchable_event.dart';
 import '../../domain/models/shared/experience_item.dart';
 import '../../../features/experience_detail/presentation/pages/experience_detail_page.dart';
 
@@ -51,6 +52,47 @@ class NavigationUtils {
       ),
     );
   }
+
+  /// Navigation vers la page détail d'un événement
+  static void navigateToEventDetail(
+      BuildContext context, {
+        required SearchableEvent event,
+        required String heroTag,
+      }) {
+
+    print('🚀 NAVIGATION EVENT: heroTag = "$heroTag" pour ${event.base.name}');
+
+    final experienceItem = ExperienceItem.event(event);
+
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: true,
+        transitionDuration: const Duration(milliseconds: 350),
+        reverseTransitionDuration: const Duration(milliseconds: 300),
+
+        pageBuilder: (_, __, ___) => ExperienceDetailPage(
+          experienceItem: experienceItem,
+          onClose: () {
+            print('🔙 NAVIGATION: Fermeture detail page');
+            Navigator.pop(context);
+          },
+          heroTag: heroTag,
+        ),
+
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(
+            opacity: animation.drive(
+              CurveTween(curve: const Interval(0.0, 1.0, curve: Curves.easeInOut)),
+            ),
+            child: child,
+          );
+        },
+
+        settings: RouteSettings(name: '${RouteNames.eventDetails}/${event.base.id}'),
+      ),
+    );
+  }
+
 
   /// ✅ OPENCONTAINER (pour migration future) - Pas utilisé pour l'instant
   static Widget buildOpenContainer({

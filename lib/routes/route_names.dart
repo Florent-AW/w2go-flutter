@@ -15,10 +15,17 @@ class RouteNames {
   // Routes futures (à compléter au fur et à mesure)
   static const String activityDetails = '/activity-details';
   static const String activityDetailsWithId = '/activity-details/:id';
+  static const String eventDetails = '/event-details';
+  static const String eventDetailsWithId = '/event-details/:id';
   static const String search = '/search';
 
   // Méthode utilitaire pour générer une route d'activité avec un ID spécifique
   static String getActivityDetailsRoute(String activityId) {
     return '$activityDetails/$activityId';
+  }
+
+  // Méthode utilitaire pour générer une route d'événement avec un ID spécifique
+  static String getEventDetailsRoute(String eventId) {
+    return '$eventDetails/$eventId';
   }
 }

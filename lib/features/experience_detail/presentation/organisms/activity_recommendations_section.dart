@@ -7,6 +7,7 @@ import 'package:infinite_carousel/infinite_carousel.dart';
 import '../../../../core/domain/services/shared/activity_recommendation_service.dart';
 import '../../../../core/domain/models/shared/experience_item.dart';
 import '../../../../core/domain/models/activity/search/searchable_activity.dart';
+import '../../../../core/domain/models/event/search/searchable_event.dart';
 import '../../../shared_ui/presentation/widgets/organisms/generic_experience_carousel.dart';
 import '../pages/experience_detail_page.dart';
 import '../../../experience_detail/application/providers/experience_recommendations_provider.dart';
@@ -125,9 +126,15 @@ class ActivityRecommendationsSection extends ConsumerWidget {
         );
       }
 
-      // Sinon, mapper SearchableActivity vers ExperienceItem
+      // Sinon, mapper SearchableActivity ou SearchableEvent vers ExperienceItem
       if (experience is SearchableActivity) {
         final experienceItem = ExperienceItem.activity(experience);
+        return ExperienceDetailPage(
+          experienceItem: experienceItem,
+          onClose: action,
+        );
+      } else if (experience is SearchableEvent) {
+        final experienceItem = ExperienceItem.event(experience);
         return ExperienceDetailPage(
           experienceItem: experienceItem,
           onClose: action,
