@@ -71,8 +71,7 @@ class ActivityCardFooter extends StatelessWidget {
         // Espacement après tags
         SizedBox(height: AppDimensions.spacingXxs), // 8px
 
-        // Prend l'espace disponible pour rapprocher le bas de la card
-        const Spacer(),
+
 
         // Ville et distance sur la même ligne
         Row(
