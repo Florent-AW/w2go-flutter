@@ -10,6 +10,7 @@ import '../organisms/experience_info_section.dart';
 import '../organisms/experience_description_panel.dart';
 import '../organisms/activity_recommendations_section.dart';
 import '../organisms/experience_floating_action_bar.dart';
+import '../organisms/experience_top_bar.dart';
 import '../../application/providers/experience_detail_providers.dart';
 
 /// ✅ VERSION SIMPLE : Page de détail qui marche avec Hero classique
@@ -31,11 +32,15 @@ class ExperienceDetailPage extends ConsumerStatefulWidget {
 
 class _ExperienceDetailPageState extends ConsumerState<ExperienceDetailPage> {
   bool _showBody = false;
-  bool _showCarousel = false; // ✅ PROGRESSIVE : contrôle du carousel
+  bool _showCarousel = false;
+  late ScrollController _scrollController;
+  bool _showTopBar = false;
 
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController();
+    _scrollController.addListener(_onScroll);
     _loadExperienceDetails();
   }
 
@@ -47,6 +52,8 @@ class _ExperienceDetailPageState extends ConsumerState<ExperienceDetailPage> {
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _cleanupHeroListener();
     super.dispose();
   }
@@ -69,6 +76,7 @@ class _ExperienceDetailPageState extends ConsumerState<ExperienceDetailPage> {
         children: [
           // ✅ PROGRESSIVE : CustomScrollView avec contrôle progressif
           CustomScrollView(
+            controller: _scrollController,
             physics: const ClampingScrollPhysics(),
             slivers: [
               // ✅ PROGRESSIVE : Header avec contrôle carousel
@@ -155,6 +163,17 @@ class _ExperienceDetailPageState extends ConsumerState<ExperienceDetailPage> {
               ),
             ),
           ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: ExperienceTopBar(
+              categoryName: widget.experienceItem.categoryName ?? '',
+              onBack: widget.onClose,
+              onCategoryTap: widget.onClose,
+              visible: _showTopBar,
+            ),
+          ),
         ],
       ),
     );
@@ -198,5 +217,14 @@ class _ExperienceDetailPageState extends ConsumerState<ExperienceDetailPage> {
   void _cleanupHeroListener() {
     final routeAnimation = ModalRoute.of(context)?.animation;
     routeAnimation?.removeStatusListener(_onAnimationStatusChanged);
+  }
+
+  void _onScroll() {
+    final shouldShow = _scrollController.offset > 400;
+    if (shouldShow != _showTopBar && mounted) {
+      setState(() {
+        _showTopBar = shouldShow;
+      });
+    }
   }
 }
