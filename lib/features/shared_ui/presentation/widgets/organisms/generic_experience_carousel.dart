@@ -102,9 +102,11 @@ class GenericExperienceCarousel extends ConsumerWidget {
         children: [
           // ✅ Titre et bouton "Voir tout"
           Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppDimensions.spacingS,
-              vertical: AppDimensions.spacingXs,
+            padding: EdgeInsets.only(
+              left: AppDimensions.spacingS,
+              right: AppDimensions.spacingS,
+              top: 0, // ✅ Top padding très réduit
+              bottom: AppDimensions.spacingXs, // ✅ Bottom normal
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

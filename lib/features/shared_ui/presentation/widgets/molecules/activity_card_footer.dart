@@ -38,11 +38,11 @@ class ActivityCardFooter extends StatelessWidget {
         left: AppDimensions.spacingXxxs,
         right: AppDimensions.spacingXxxs,
         top: AppDimensions.spacingXs,
-        // Pas de bottom padding
+        bottom: 10,
       ),
       child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
         // Afficher la sous-catégorie conditionnellement
         if (showSubcategory)
           ActivityCategoryLabel(
@@ -70,6 +70,9 @@ class ActivityCardFooter extends StatelessWidget {
 
         // Espacement après tags
         SizedBox(height: AppDimensions.spacingXxs), // 8px
+
+        // Prend l'espace disponible pour rapprocher le bas de la card
+        const Spacer(),
 
         // Ville et distance sur la même ligne
         Row(

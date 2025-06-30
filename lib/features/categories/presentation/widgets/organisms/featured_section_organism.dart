@@ -146,6 +146,7 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
                         key: ValueKey('featured_events_${widget.currentCategory.id}_${section.id}'),
                         scrollController: _getControllerForSection('events_${widget.currentCategory.id}_${section.id}'), // ✅ AJOUT
                         title: section.title,
+                        heroPrefix: 'featured-${widget.currentCategory.id}-${section.id}',
                         experiences: experiences,
                         openBuilder: _buildOpenBuilder(),
                       ),
@@ -158,6 +159,7 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
                       key: ValueKey('featured_events_loading_${widget.currentCategory.id}_${section.id}'),
                       scrollController: _getControllerForSection('events_loading_${widget.currentCategory.id}_${section.id}'), // ✅ AJOUT
                       title: section.title,
+                      heroPrefix: 'featured-${widget.currentCategory.id}-${section.id}',
                       experiences: null,
                       isLoading: true,
                     ),
@@ -178,6 +180,7 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
           key: ValueKey('featured_events_loading_${widget.currentCategory.id}'),
           scrollController: _getControllerForSection('events_general_loading_${widget.currentCategory.id}'), // ✅ AJOUT
           title: 'Événements',
+          heroPrefix: 'featured-${widget.currentCategory.id}',
           experiences: null,
           isLoading: true,
         ),
