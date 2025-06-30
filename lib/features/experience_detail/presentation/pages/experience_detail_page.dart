@@ -111,27 +111,36 @@ class _ExperienceDetailPageState extends ConsumerState<ExperienceDetailPage> {
                   opacity: _showBody ? 1.0 : 0.0,
                   duration: const Duration(milliseconds: 120),
                   child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: AppDimensions.spacingM),
+                    padding: EdgeInsets.symmetric(horizontal: AppDimensions.spacingXxs),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        SizedBox(height: AppDimensions.spacingL),
+                        // ✅ Contenu avec même padding que l'intro pour alignement
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: AppDimensions.spacingS),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(height: AppDimensions.spacingL),
 
-                        // ✅ Section Infos pratiques (Factory patterns)
-                        ExperienceInfoSection(
-                          experienceItem: widget.experienceItem,
+                              // ✅ Section Infos pratiques (Factory patterns)
+                              ExperienceInfoSection(
+                                experienceItem: widget.experienceItem,
+                              ),
+
+                              SizedBox(height: AppDimensions.spacingL),
+
+                              // ✅ Section Description (expandable)
+                              ExperienceDescriptionPanel(
+                                experienceItem: widget.experienceItem,
+                              ),
+
+                              SizedBox(height: AppDimensions.spacingL),
+                            ],
+                          ),
                         ),
 
-                        SizedBox(height: AppDimensions.spacingL),
-
-                        // ✅ Section Description (expandable)
-                        ExperienceDescriptionPanel(
-                          experienceItem: widget.experienceItem,
-                        ),
-
-                        SizedBox(height: AppDimensions.spacingL),
-
-                        // ✅ Section Recommandations (Activities seulement)
+                        // ✅ Section Recommandations SANS padding (full-width)
                         if (!widget.experienceItem.isEvent)
                           ActivityRecommendationsSection(
                             activityId: widget.experienceItem.id,

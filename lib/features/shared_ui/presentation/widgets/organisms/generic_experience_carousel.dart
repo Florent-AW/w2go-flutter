@@ -136,7 +136,6 @@ class GenericExperienceCarousel extends ConsumerWidget {
           // ✅ Contenu du carousel
           Container(
             height: AppDimensions.activityCardHeight - 20,
-            margin: EdgeInsets.only(bottom: AppDimensions.spacingXs),
             child: _buildContent(context, ref, allDistances, selectedCity),
           ),
         ],

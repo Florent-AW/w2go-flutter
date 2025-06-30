@@ -141,7 +141,7 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
 
                     // ✅ Container seulement si il y a du contenu + contrôleur unique
                     return Container(
-                      margin: EdgeInsets.only(bottom: AppDimensions.spacingM),
+                      padding: EdgeInsets.only(bottom: 4.0),
                       child: GenericExperienceCarousel(
                         key: ValueKey('featured_events_${widget.currentCategory.id}_${section.id}'),
                         scrollController: _getControllerForSection('events_${widget.currentCategory.id}_${section.id}'), // ✅ AJOUT
@@ -152,7 +152,7 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
                     );
                   },
                   loading: () => Container(
-                    margin: EdgeInsets.only(bottom: AppDimensions.spacingM),
+                    margin: EdgeInsets.only(bottom: AppDimensions.spacingXs),
                     height: AppDimensions.activityCardHeight + AppDimensions.space20,
                     child: GenericExperienceCarousel(
                       key: ValueKey('featured_events_loading_${widget.currentCategory.id}_${section.id}'),
@@ -173,7 +173,7 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
       },
       loading: () => Container(
         height: AppDimensions.activityCardHeight + AppDimensions.space20,
-        margin: EdgeInsets.only(bottom: AppDimensions.spacingM),
+        margin: EdgeInsets.only(bottom: AppDimensions.spacingXs),
         child: GenericExperienceCarousel(
           key: ValueKey('featured_events_loading_${widget.currentCategory.id}'),
           scrollController: _getControllerForSection('events_general_loading_${widget.currentCategory.id}'), // ✅ AJOUT

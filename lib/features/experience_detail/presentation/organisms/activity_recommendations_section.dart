@@ -3,14 +3,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:infinite_carousel/infinite_carousel.dart';
 import '../../../../core/domain/services/shared/activity_recommendation_service.dart';
 import '../../../../core/domain/models/shared/experience_item.dart';
 import '../../../../core/domain/models/activity/search/searchable_activity.dart';
 import '../../../../core/domain/models/event/search/searchable_event.dart';
 import '../../../shared_ui/presentation/widgets/organisms/generic_experience_carousel.dart';
-import '../pages/experience_detail_page.dart';
 import '../../../experience_detail/application/providers/experience_recommendations_provider.dart';
+import '../pages/experience_detail_page.dart';
 
 /// Section complète des recommandations d'activités
 ///

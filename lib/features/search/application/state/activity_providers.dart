@@ -111,12 +111,10 @@ final subcategorySectionActivitiesProvider = FutureProvider.family<Map<String, L
       return {};
     }
 
-    // Récupérer les sections
-    final sectionsAsync = ref.read(subcategorySectionsProvider);
-    final sections = await sectionsAsync.maybeWhen(
-      data: (data) => data,
-      orElse: () => <SectionMetadata>[],
-    );
+    // Récupérer les sections et attendre explicitement leur chargement
+    final sections = await ref.read(
+      subcategorySectionsProvider.future,
+    ).catchError((_) => <SectionMetadata>[]);
 
     if (sections.isEmpty) {
       print('⚠️ Aucune section de sous-catégorie n\'a été trouvée');
