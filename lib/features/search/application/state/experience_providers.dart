@@ -26,6 +26,7 @@ City? city,
 /// Provider qui combine activities et events en ExperienceItem
 /// pour les expériences mises en avant par catégorie
 /// Provider pour les événements mis en avant par catégorie
+
 /// Utilise le nouveau use case avec section_id SPÉCIFIQUE aux events
 final featuredExperiencesByCategoryProvider = FutureProvider.family<List<ExperienceItem>, FeaturedExperiencesKey>(
       (ref, key) async {
@@ -205,23 +206,39 @@ final subcategorySectionExperiencesProvider = FutureProvider.family<Map<String, 
 final featuredSectionsByCategoryProvider = FutureProvider.family<List<SectionMetadata>, String>((ref, categoryId) async {
   try {
     final client = Supabase.instance.client;
+
+    // ✅ NOUVEAU : Récupérer TOUTES les sections featured (spécifiques + génériques)
     final response = await client
         .from('home_sections')
-        .select('id, title, priority, query_filter')
-        .eq('category_id', categoryId)
+        .select('id, title, priority, query_filter, category_id')
         .eq('section_type', 'featured')
         .order('priority')
         .order('display_order');
 
-    final sections = (response as List).map((json) => SectionMetadata(
+    final allSections = (response as List).map((json) => SectionMetadata(
       id: json['id'],
       title: json['title'],
       sectionType: 'featured',
       priority: json['priority'],
+      categoryId: json['category_id'], // ✅ AJOUT nécessaire
     )).toList();
 
-    print('✅ Sections featured pour $categoryId: ${sections.map((s) => s.title).join(", ")}');
-    return sections;
+    // ✅ LOGIQUE FALLBACK : Séparer spécifiques vs génériques
+    final specifics = allSections.where((s) => s.categoryId == categoryId).toList();
+    final generics = allSections.where((s) => s.categoryId == null).toList();
+
+    // ✅ RÈGLE INTELLIGENTE : spécifique sinon générique
+    final effectiveSections = specifics.isNotEmpty ? specifics : generics;
+
+    // Tri par priorité
+    effectiveSections.sort((a, b) => a.priority.compareTo(b.priority));
+
+    print('📊 Sections featured pour catégorie $categoryId:');
+    print('   - Spécifiques: ${specifics.length} (${specifics.map((s) => s.title).join(", ")})');
+    print('   - Génériques: ${generics.length} (${generics.map((s) => s.title).join(", ")})');
+    print('   - Utilisées: ${effectiveSections.length} (${effectiveSections.map((s) => s.title).join(", ")})');
+
+    return effectiveSections;
   } catch (e) {
     print('❌ Erreur récupération sections featured: $e');
     return [];
@@ -258,6 +275,43 @@ final featuredEventsBySectionProvider = FutureProvider.family<List<ExperienceIte
 
     final experiences = events.map((event) => ExperienceItem.event(event)).toList();
     print('✅ Section $sectionId: ${experiences.length} événements avec logos/subcategory');
+    return experiences;
+  } catch (e) {
+    print('❌ Erreur section $sectionId: $e');
+    return [];
+  }
+});
+
+/// Provider pour les activités d'une section featured spécifique
+final featuredActivitiesBySectionProvider = FutureProvider.family<List<ExperienceItem>, ({String sectionId, String categoryId, City? city})>((ref, params) async {
+  final sectionId = params.sectionId;
+  final categoryId = params.categoryId;
+  final city = params.city;
+
+  if (city == null) return [];
+
+  try {
+    final activities = await ref.read(getActivitiesUseCaseProvider).execute(
+      latitude: city.lat,
+      longitude: city.lon,
+      sectionId: sectionId,
+      categoryId: categoryId,
+      limit: 30,
+    );
+
+    // ✅ Cache des distances
+    if (activities.isNotEmpty) {
+      ref.read(activityDistancesProvider.notifier).cacheActivitiesDistances(
+          activities.map((activity) => (
+          id: activity.base.id,
+          lat: activity.base.latitude,
+          lon: activity.base.longitude,
+          )).toList()
+      );
+    }
+
+    final experiences = activities.map((activity) => ExperienceItem.activity(activity)).toList();
+    print('✅ Section $sectionId: ${experiences.length} activités');
     return experiences;
   } catch (e) {
     print('❌ Erreur section $sectionId: $e');

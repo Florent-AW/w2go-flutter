@@ -294,7 +294,7 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // Ajouter de l'espace en haut
-                          SizedBox(height: AppDimensions.spacingXs),
+                          SizedBox(height: AppDimensions.spacingM),
 
                           // ✅ NOUVEAU : Organism unifié pour Featured
                           FeaturedSectionOrganism(

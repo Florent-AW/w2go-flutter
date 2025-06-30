@@ -126,7 +126,7 @@ class AppDimensions {
   static const double borderWidthThick = 3;   // Bordure épaisse
 
   // Dimensions de activity card
-  static const double activityCardHeight = 340.0;
+  static const double activityCardHeight = 420.0;
   static const double activityCardHeaderHeight = 0.5;
   static const double activityCardDefaultWidth = 280.0; // Largeur minimale de sécurité
 

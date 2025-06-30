@@ -92,17 +92,8 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
       );
     }
 
-    // ✅ LOGIQUE UNIFIÉE : Détection Events pour sections multiples
-    const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
-    final isEventsCategory = widget.currentCategory.id == eventsCategoryId;
-
-    if (isEventsCategory) {
-      // ✅ Events : Sections multiples (Autour de moi, À moins d'une heure, Évasion)
-      return _buildMultipleFeaturedSections(selectedCity);
-    } else {
-      // ✅ Activities : Section unique unifiée
-      return _buildSingleFeaturedSection(selectedCity);
-    }
+    // ✅ LOGIQUE UNIFIÉE : Toutes les catégories utilisent sections multiples
+    return _buildMultipleFeaturedSections(selectedCity);
   }
 
   /// ✅ EXTRACTION : Events multiples sections avec contrôleurs
@@ -123,11 +114,23 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
           sectionWidgets.add(
             Consumer(
               builder: (context, ref, _) {
-                final experiencesAsync = ref.watch(featuredEventsBySectionProvider((
-                sectionId: section.id,
-                categoryId: widget.currentCategory.id,
-                city: selectedCity,
-                )));
+                // ✅ LOGIQUE INTELLIGENTE : Choisir le bon provider selon la catégorie
+                const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
+                final isEventsCategory = widget.currentCategory.id == eventsCategoryId;
+
+                final experiencesAsync = ref.watch(
+                    isEventsCategory
+                        ? featuredEventsBySectionProvider((
+                    sectionId: section.id,
+                    categoryId: widget.currentCategory.id,
+                    city: selectedCity,
+                    ))
+                        : featuredActivitiesBySectionProvider((
+                    sectionId: section.id,
+                    categoryId: widget.currentCategory.id,
+                    city: selectedCity,
+                    ))
+                );
 
                 return experiencesAsync.when(
                   data: (experiences) {
@@ -180,46 +183,6 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
         ),
       ),
       error: (error, stack) => const SizedBox.shrink(), // ✅ Masquer les erreurs
-    );
-  }
-
-  /// ✅ EXTRACTION : Activities section unique avec contrôleur
-  Widget _buildSingleFeaturedSection(dynamic selectedCity) {
-    final experiencesAsync = ref.watch(featuredExperiencesByCategoryProvider((
-    categoryId: widget.currentCategory.id,
-    city: selectedCity,
-    )));
-
-    return SizedBox(
-      height: AppDimensions.activityCardHeight + AppDimensions.space20,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        child: experiencesAsync.when(
-          data: (experiences) => GenericExperienceCarousel(
-            key: ValueKey('featured_${widget.currentCategory.id}'),
-            scrollController: _getControllerForSection('featured_${widget.currentCategory.id}'), // ✅ AJOUT
-            title: 'Les incontournables du moment',
-            experiences: experiences,
-            openBuilder: _buildOpenBuilder(),
-          ),
-          loading: () => GenericExperienceCarousel(
-            key: ValueKey('featured_loading_${widget.currentCategory.id}'),
-            scrollController: _getControllerForSection('featured_loading_${widget.currentCategory.id}'), // ✅ AJOUT
-            title: 'Les incontournables du moment',
-            experiences: null,
-            isLoading: true,
-          ),
-          error: (error, stack) => GenericExperienceCarousel(
-            key: ValueKey('featured_error_${widget.currentCategory.id}'),
-            scrollController: _getControllerForSection('featured_error_${widget.currentCategory.id}'), // ✅ AJOUT
-            title: 'Les incontournables du moment',
-            experiences: [],
-            errorMessage: 'Erreur de chargement',
-          ),
-        ),
-      ),
     );
   }
 

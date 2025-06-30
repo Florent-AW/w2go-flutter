@@ -265,13 +265,19 @@ extension TextStyleExtension on BuildContext {
   bool get isDark => Theme.of(this).brightness == Brightness.dark;
 
   TextStyle get title => AppTypography.title(isDark: isDark);
+  TextStyle get titleM => AppTypography.titleM(isDark: isDark);
   TextStyle get titleS => AppTypography.titleS(isDark: isDark);
+  TextStyle get titleXs => AppTypography.titleXs(isDark: isDark);
+  TextStyle get titleXxs => AppTypography.titleXxs(isDark: isDark);
   TextStyle get subtitle => AppTypography.subtitle(isDark: isDark);
+  TextStyle get subtitleS => AppTypography.subtitleS(isDark: isDark);
   TextStyle get body => AppTypography.body(isDark: isDark);
   TextStyle get bodySecondary => AppTypography.body(isDark: isDark, isSecondary: true);
   TextStyle get caption => AppTypography.caption(isDark: isDark);
   TextStyle get captionSecondary => AppTypography.caption(isDark: isDark, isSecondary: true);
   TextStyle get buttonStyle => AppTypography.button(isDark: isDark);
+  TextStyle get buttonS => AppTypography.buttonS(isDark: isDark);
+  TextStyle get buttonXs => AppTypography.buttonXs(isDark: isDark);
   TextStyle get label => AppTypography.label(isDark: isDark);
   TextStyle get labelSecondary => AppTypography.label(isDark: isDark, isSecondary: true);
 }

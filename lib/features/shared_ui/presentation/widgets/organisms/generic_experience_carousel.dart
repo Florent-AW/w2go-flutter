@@ -114,7 +114,7 @@ class GenericExperienceCarousel extends ConsumerWidget {
                   children: [
                     Text(
                       title,
-                      style: context.titleS,
+                      style: context.titleM,
                     ),
                   ],
                 ),
