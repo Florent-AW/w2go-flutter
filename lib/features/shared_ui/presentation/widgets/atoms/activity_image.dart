@@ -3,9 +3,10 @@
 import 'package:flutter/material.dart';
 import '../../../../../core/common/utils/caching_image_provider.dart';
 import '../../../../../core/theme/app_dimensions.dart';
+import '../../../../../core/common/utils/viewport_clamped_rect_tween_mixin.dart';
 import '../atoms/image_placeholders.dart';
 
-class ActivityImage extends StatelessWidget {
+class ActivityImage extends StatelessWidget with ViewportClampedRectTweenMixin {
   final String imageUrl;
   final double height;
   final double? width;
@@ -43,6 +44,7 @@ class ActivityImage extends StatelessWidget {
     if (heroTag != null) {
       return Hero(
         tag: heroTag!,
+        createRectTween: (b, e) => viewportClampedRectTween(b, e, context),
         // ✅ Optimisations Hero selon experts
         placeholderBuilder: (context, heroSize, child) => child,
         flightShuttleBuilder: (flightContext, animation, flightDirection, fromHeroContext, toHeroContext) {

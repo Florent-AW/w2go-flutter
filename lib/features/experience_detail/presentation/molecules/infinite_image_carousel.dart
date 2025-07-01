@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:infinite_carousel/infinite_carousel.dart';
 import '../../../../core/common/utils/caching_image_provider.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../utils/hero_rect_tween_mixin.dart';
+import '../../../../core/common/utils/viewport_clamped_rect_tween_mixin.dart';
 import '../atoms/carousel_indicator.dart';
 
 /// Widget pour afficher un carousel d'images en mode infini
@@ -32,26 +32,6 @@ class _InfiniteImageCarouselState extends State<InfiniteImageCarousel>
     with ViewportClampedRectTweenMixin {
   late InfiniteScrollController _controller;
   int _currentIndex = 0;
-
-  /// Custom RectTween that clamps the initial Y position when closing the page
-  Tween<Rect?> _clampedRectTween(Rect? begin, Rect? end) {
-    if (begin == null || end == null) {
-      return RectTween(begin: begin, end: end);
-    }
-
-    const double minY = 56.0;
-
-    final clampedTop = begin.top < minY ? minY : begin.top;
-
-    final clampedBegin = Rect.fromLTWH(
-      begin.left,
-      clampedTop,
-      begin.width,
-      begin.height,
-    );
-
-    return MaterialRectCenterArcTween(begin: clampedBegin, end: end);
-  }
 
   @override
   void initState() {
@@ -113,7 +93,7 @@ class _InfiniteImageCarouselState extends State<InfiniteImageCarousel>
 
     return Hero(
       tag: tag,
-      createRectTween: viewportClampedRectTween,
+      createRectTween: (b, e) => viewportClampedRectTween(b, e, context),
       // ✅ NOUVEAU placeholder : image du premier slide au lieu de transparent
       placeholderBuilder: (_, __, ___) => Image(
         image: CachingImageProvider.of(widget.imageUrls.first),
