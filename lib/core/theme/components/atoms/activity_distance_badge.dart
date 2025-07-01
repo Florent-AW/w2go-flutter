@@ -43,9 +43,10 @@ class ActivityDistanceBadge extends ConsumerWidget {
         ),
         child: Text(
           distanceText,
-          style: AppTypography.subtitleS(isDark: false).copyWith(
+          style: AppTypography.caption(isDark: false).copyWith(
             color: Colors.white, // ✅ Toujours blanc
             fontWeight: FontWeight.w600,
+            fontSize: 12.0,
           ),
         ),
       ),
@@ -84,15 +85,9 @@ class _DirectionSignPainter extends CustomPainter {
     path.moveTo(radius, 0);
     path.lineTo(size.width - arrowWidth, 0);
 
-    // Pointe droite (flèche) avec courbes arrondies
-    path.quadraticBezierTo(
-      size.width - 2.0, size.height * 0.3, // ✅ Point de contrôle haut
-      size.width, size.height / 2,         // ✅ Pointe de la flèche
-    );
-    path.quadraticBezierTo(
-      size.width - 2.0, size.height * 0.7, // ✅ Point de contrôle bas
-      size.width - arrowWidth, size.height, // ✅ Retour vers le rectangle
-    );
+    // Pointe droite (flèche)
+    path.lineTo(size.width, size.height / 2);
+    path.lineTo(size.width - arrowWidth, size.height);
 
     // Retour avec angles arrondis
     path.lineTo(radius, size.height);
