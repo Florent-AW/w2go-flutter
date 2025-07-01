@@ -133,7 +133,7 @@ class _ExperienceDetailPageState extends ConsumerState<ExperienceDetailPage> {
                                 experienceItem: widget.experienceItem,
                               ),
 
-                              SizedBox(height: AppDimensions.spacingXl),
+                              SizedBox(height: AppDimensions.spacingM),
                             ],
                           ),
                         ),
