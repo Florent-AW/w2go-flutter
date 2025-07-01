@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/common/utils/caching_image_provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../utils/hero_rect_tween_mixin.dart';
 import 'infinite_image_carousel.dart';
 
 /// Widget qui gère le progressive loading du header :
@@ -24,8 +25,30 @@ class HeaderContent extends StatefulWidget {
   State<HeaderContent> createState() => _HeaderContentState();
 }
 
-class _HeaderContentState extends State<HeaderContent> {
+class _HeaderContentState extends State<HeaderContent>
+    with ViewportClampedRectTweenMixin {
   bool _showCarousel = false;
+
+  /// Custom RectTween that clamps the initial Y position when closing the page
+  Tween<Rect?> _clampedRectTween(Rect? begin, Rect? end) {
+    if (begin == null || end == null) {
+      return RectTween(begin: begin, end: end);
+    }
+
+    const double minY = 56.0;
+
+    final clampedTop = begin.top < minY ? minY : begin.top;
+
+    final clampedBegin = Rect.fromLTWH(
+      begin.left,
+      clampedTop,
+      begin.width,
+      begin.height,
+    );
+
+    return MaterialRectCenterArcTween(begin: clampedBegin, end: end);
+  }
+
 
   @override
   void didChangeDependencies() {
@@ -70,7 +93,7 @@ class _HeaderContentState extends State<HeaderContent> {
       print('🖼️ HEADER CONTENT: Phase 1 - Image simple du premier slide');
       return Hero(
         tag: widget.heroTag,
-        createRectTween: (begin, end) => MaterialRectCenterArcTween(begin: begin, end: end),
+        createRectTween: viewportClampedRectTween,
         placeholderBuilder: (_, __, ___) => const SizedBox.expand(),
         child: Container(
           width: double.infinity,
