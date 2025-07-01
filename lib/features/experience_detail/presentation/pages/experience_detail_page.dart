@@ -68,8 +68,6 @@ class _ExperienceDetailPageState extends ConsumerState<ExperienceDetailPage> {
       orElse: () => [widget.experienceItem.mainImageUrl ?? ''],
     );
 
-    print('📄 PROGRESSIVE PAGE: showBody=$_showBody, showCarousel=$_showCarousel, images=${imageUrls.length}');
-
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Stack(
@@ -121,21 +119,21 @@ class _ExperienceDetailPageState extends ConsumerState<ExperienceDetailPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              SizedBox(height: AppDimensions.spacingL),
+                              SizedBox(height: AppDimensions.spacingXs),
 
                               // ✅ Section Infos pratiques (Factory patterns)
                               ExperienceInfoSection(
                                 experienceItem: widget.experienceItem,
                               ),
 
-                              SizedBox(height: AppDimensions.spacingL),
+                              SizedBox(height: AppDimensions.spacingM),
 
                               // ✅ Section Description (expandable)
                               ExperienceDescriptionPanel(
                                 experienceItem: widget.experienceItem,
                               ),
 
-                              SizedBox(height: AppDimensions.spacingL),
+                              SizedBox(height: AppDimensions.spacingXl),
                             ],
                           ),
                         ),
@@ -180,7 +178,13 @@ class _ExperienceDetailPageState extends ConsumerState<ExperienceDetailPage> {
               categoryName: widget.experienceItem.categoryName ?? '',
               onBack: widget.onClose,
               onCategoryTap: widget.onClose,
-              visible: _showTopBar,
+              isFavorite: false, // TODO: Implémenter state favori
+              onFavoritePressed: () {
+                // TODO: Implémenter fonctionnalité favori
+                print('🤍 Favori pressed - TODO: Implémenter');
+              },
+              visible: true, // ✅ Toujours visible maintenant
+              showBackground: _showTopBar,
             ),
           ),
         ],
@@ -229,7 +233,7 @@ class _ExperienceDetailPageState extends ConsumerState<ExperienceDetailPage> {
   }
 
   void _onScroll() {
-    final shouldShow = _scrollController.offset > 400;
+    final shouldShow = _scrollController.offset > 300;
     if (shouldShow != _showTopBar && mounted) {
       setState(() {
         _showTopBar = shouldShow;

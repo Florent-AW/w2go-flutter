@@ -86,7 +86,7 @@ class ExperienceTitleInfo extends StatelessWidget {
     return Text(
       title,
       style: AppTypography.title(isDark: false),
-      maxLines: 2,
+      maxLines: 3,
       overflow: TextOverflow.ellipsis,
     );
   }
@@ -106,29 +106,6 @@ class ExperienceTitleInfo extends StatelessWidget {
     final locationText = [city, address]
         .where((item) => item != null && item.isNotEmpty)
         .join(', ');
-
-// ✅ DEBUG approfondi
-    print('🏠 LOCATION DEBUG DETAILLÉ:');
-    print('  isEvent: ${experienceItem.isEvent}');
-    print('  city: $city');
-    print('  details != null: ${details != null}');
-    if (details != null) {
-      details.when(
-        activity: (activityDetails) {
-          print('  === ACTIVITY DETAILS ===');
-          print('  address: ${activityDetails.address}');
-          print('  name: ${activityDetails.name}');
-        },
-        event: (eventDetails) {
-          print('  === EVENT DETAILS ===');
-          print('  address: ${eventDetails.address}');
-          print('  name: ${eventDetails.name}');
-          print('  city: ${eventDetails.city}');
-          print('  postalCode: ${eventDetails.postalCode}');
-          print('  contactPhone: ${eventDetails.contactPhone}');
-        },
-      );
-    }
 
     return Row(
       children: [

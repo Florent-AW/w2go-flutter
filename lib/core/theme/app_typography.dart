@@ -32,18 +32,18 @@ class AppTypography {
 
   // STYLES PRINCIPAUX
 
-  /// Titre principal (28px)
-  static TextStyle title({bool isDark = false}) => _getFont(
-    fontSize: 28,
+  /// Titre principal (26px)
+  static TextStyle titleM({bool isDark = false}) => _getFont(
+    fontSize: 26,
     fontWeight: FontWeight.bold,
     letterSpacing: -0.5,
     color: isDark ? Colors.white : AppColors.primary,
     height: _lineHeightNormal,
   );
 
-  /// Titre principal (28px)
-  static TextStyle titleM({bool isDark = false}) => _getFont(
-    fontSize: 26,
+  /// Titre principal (24px)
+  static TextStyle title({bool isDark = false}) => _getFont(
+    fontSize: 24,
     fontWeight: FontWeight.bold,
     letterSpacing: -0.5,
     color: isDark ? Colors.white : AppColors.primary,

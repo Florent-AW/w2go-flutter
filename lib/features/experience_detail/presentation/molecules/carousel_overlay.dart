@@ -25,22 +25,6 @@ class CarouselOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // ✅ ATOM : Bouton back
-        SafeArea(
-          child: Align(
-            alignment: Alignment.topLeft,
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: CircleBackButton(
-                onPressed: onDismiss,
-                backgroundColor: Colors.white,
-                iconColor: AppColors.primary,
-                size: 38,
-                iconSize: 20,
-              ),
-            ),
-          ),
-        ),
 
         // ✅ ATOM : Swipe dismiss detector
         SwipeDismissDetector(onDismiss: onDismiss),
