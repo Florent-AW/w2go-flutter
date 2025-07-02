@@ -1,7 +1,7 @@
 // lib/features/shared_ui/presentation/widgets/molecules/navigation_buttons_row.dart
 
 import 'package:flutter/material.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_dimensions.dart';
 import '../../../../../core/theme/components/atoms/action_button.dart';
