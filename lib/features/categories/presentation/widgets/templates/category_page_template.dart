@@ -384,10 +384,6 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
           ),
         ),
       ),
-      bottomNavigationBar: GenericBottomBar(
-        selectedTab: BottomNavTab.explorer,
-        // ✅ Plus besoin de onTabSelected - la navigation est automatique
-      ),
     );
   }
 

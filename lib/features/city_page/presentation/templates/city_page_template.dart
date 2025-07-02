@@ -80,9 +80,6 @@ class CityPageTemplate extends ConsumerWidget {
           ),
         ],
       ),
-      bottomNavigationBar: GenericBottomBar(
-        selectedTab: BottomNavTab.visiter,
-      ),
     );  }
 
   /// Construit les sections par catégorie avec des données

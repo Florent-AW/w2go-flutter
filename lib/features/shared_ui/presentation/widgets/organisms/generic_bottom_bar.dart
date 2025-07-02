@@ -6,16 +6,18 @@ import '../molecules/navigation_buttons_row.dart';
 
 export '../molecules/navigation_buttons_row.dart' show BottomNavTab;
 
-/// Bottom bar générique avec navigation 4 tabs
-/// Gère automatiquement la navigation entre les pages principales
+/// Bottom bar générique avec callback simple
+/// Plus de navigation interne - délégué au parent
 class GenericBottomBar extends StatelessWidget {
   final BottomNavTab selectedTab;
+  final ValueChanged<BottomNavTab> onTabSelected; // ✅ NOUVEAU : callback simple
   final bool isLoading;
   final EdgeInsets? customPadding;
 
   const GenericBottomBar({
     Key? key,
     this.selectedTab = BottomNavTab.explorer,
+    required this.onTabSelected, // ✅ OBLIGATOIRE maintenant
     this.isLoading = false,
     this.customPadding,
   }) : super(key: key);
@@ -25,36 +27,10 @@ class GenericBottomBar extends StatelessWidget {
     return BottomBarWrapper(
       content: NavigationButtonsRow(
         selectedTab: selectedTab,
-        onTabSelected: (tab) => _handleNavigation(context, tab),
+        onTabSelected: onTabSelected, // ✅ Délégue directement
       ),
       isLoading: isLoading,
       customPadding: customPadding,
     );
-  }
-
-  /// Navigation centralisée - Gère tous les cas de navigation
-  void _handleNavigation(BuildContext context, BottomNavTab tab) {
-    // Ne pas naviguer si on est déjà sur la bonne page
-    if (tab == selectedTab) return;
-
-    switch (tab) {
-      case BottomNavTab.explorer:
-        Navigator.of(context).pushReplacementNamed('/category');
-        break;
-
-      case BottomNavTab.favoris:
-      // TODO: Navigation vers favoris quand la page sera créée
-        print('🚧 Navigation vers favoris - À implémenter');
-        break;
-
-      case BottomNavTab.visiter:
-        Navigator.of(context).pushReplacementNamed('/city');
-        break;
-
-      case BottomNavTab.profil:
-      // TODO: Navigation vers profil quand la page sera créée
-        print('🚧 Navigation vers profil - À implémenter');
-        break;
-    }
   }
 }

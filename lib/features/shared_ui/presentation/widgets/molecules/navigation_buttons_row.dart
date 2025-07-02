@@ -48,10 +48,10 @@ class NavigationButtonsRow extends StatelessWidget {
             Expanded(child: _buildNavItem(BottomNavTab.explorer, LucideIcons.compass, 'Explorer')),
             SizedBox(width: AppDimensions.spacingS),
 
-            Expanded(child: _buildNavItem(BottomNavTab.favoris, LucideIcons.heart, 'Favoris')),
+            Expanded(child: _buildNavItem(BottomNavTab.visiter, LucideIcons.mapPin, 'Visiter')),
             SizedBox(width: AppDimensions.spacingS),
 
-            Expanded(child: _buildNavItem(BottomNavTab.visiter, LucideIcons.mapPin, 'Visiter')),
+            Expanded(child: _buildNavItem(BottomNavTab.favoris, LucideIcons.heart, 'Favoris')),
             SizedBox(width: AppDimensions.spacingS),
 
             Expanded(child: _buildNavItem(BottomNavTab.profil, LucideIcons.user, 'Profil')),

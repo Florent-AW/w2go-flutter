@@ -6,6 +6,8 @@ import '../features/welcome/presentation/pages/welcome_page.dart';
 import '../features/categories/presentation/pages/category_page.dart';
 import '../features/city_page/presentation/pages/city_page.dart';
 import '../features/experience_detail/presentation/pages/experience_detail_page.dart';
+import '../features/shared_ui/presentation/widgets/organisms/generic_bottom_bar.dart';
+import '../features/home/presentation/pages/home_shell.dart';
 import '../core/domain/models/shared/experience_item.dart';
 import '../core/domain/models/activity/search/searchable_activity.dart';
 import '../core/domain/models/activity/base/activity_base.dart';
@@ -86,13 +88,14 @@ class AppRouter {
 
       case RouteNames.category:
         return MaterialPageRoute(
-          builder: (_) => const CategoryPage(),
+          builder: (_) => const HomeShell(initialTab: BottomNavTab.explorer),
           settings: settings,
         );
 
+// ✅ NOUVEAU cas pour /city
       case RouteNames.city:
         return MaterialPageRoute(
-          builder: (_) => const CityPage(),
+          builder: (_) => const HomeShell(initialTab: BottomNavTab.visiter),
           settings: settings,
         );
 
