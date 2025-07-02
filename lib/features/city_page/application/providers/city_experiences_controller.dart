@@ -157,22 +157,22 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
         orElse: () => Category(id: eventsCategoryId, name: 'Événements'),
       );
 
-      // 3. Charger en parallèle : 6 catégories activités + 1 événements
+      // 3. Charger en parallèle : 1 événements + 6 catégories activités (EVENTS EN PREMIER)
       final results = await Future.wait([
-        // Activités par catégorie
+        // ✅ ÉVÉNEMENTS EN PREMIER
+        _loadEventsCategoryExperiences(eventCategory, selectedCity),
+        // Puis activités par catégorie
         ...activityCategories.map((category) =>
             _loadActivityCategoryExperiences(category, selectedCity)
         ),
-        // Événements
-        _loadEventsCategoryExperiences(eventCategory, selectedCity),
       ]);
 
       // 4. Filtrer les sections vides
       final nonEmptyResults = results.where((cat) => cat.sections.isNotEmpty).toList();
 
       print('✅ CITY CONTROLLER: ${nonEmptyResults.length} carrousels chargés pour ville $cityId');
+      print('   - 1 catégorie événements (PREMIÈRE)');
       print('   - ${activityCategories.length} catégories activités');
-      print('   - 1 catégorie événements');
 
       return nonEmptyResults;
 

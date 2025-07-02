@@ -84,7 +84,7 @@ class CategoryCoverWithTabsDelegate extends SliverPersistentHeaderDelegate {
                         categoryDepartmentDescriptionProvider(category)
                     );
 
-                    final textStyle = AppTypography.title(
+                    final textStyle = AppTypography.titleM(
                         isDark: Theme.of(context).brightness == Brightness.dark
                     ).copyWith(
                       color: Colors.white,

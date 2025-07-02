@@ -7,13 +7,15 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_dimensions.dart';
 import '../../../../../core/theme/components/organisms/app_header.dart';
 import '../../../../../core/domain/models/shared/experience_item.dart';
+import '../../../search/application/state/city_selection_state.dart';
 import '../../../shared_ui/presentation/widgets/organisms/generic_experience_carousel.dart';
-import '../../../shared_ui/presentation/widgets/organisms/generic_bottom_bar.dart';
 import '../../application/providers/city_experiences_controller.dart';
+import '../widgets/delegates/city_page_cover_delegate.dart';
+import '../widgets/delegates/city_page_cover_delegate_skeleton.dart';
 
 /// Template pour la page ville
 /// Affiche les carrousels par catégorie sans sous-catégories
-class CityPageTemplate extends ConsumerWidget {
+class CityPageTemplate extends ConsumerStatefulWidget {
   /// ID de la ville à afficher
   final String? cityId;
 
@@ -27,8 +29,16 @@ class CityPageTemplate extends ConsumerWidget {
   }) : super(key: key);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final experiencesAsync = ref.watch(cityExperiencesControllerProvider(cityId));
+  ConsumerState<CityPageTemplate> createState() => _CityPageTemplateState();
+}
+
+class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
+  bool _isHeaderScrolled = false; // ✅ Variable d'état pour le scroll
+
+  @override
+  Widget build(BuildContext context) {
+    final experiencesAsync = ref.watch(cityExperiencesControllerProvider(widget.cityId));
+    final screenWidth = MediaQuery.of(context).size.width;
 
     // Utiliser les physics appropriées selon la plateforme
     final scrollPhysics = Theme.of(context).platform == TargetPlatform.iOS
@@ -37,50 +47,82 @@ class CityPageTemplate extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.background,
-      // ✅ REPRENDRE l'approche CategoryPage
+      extendBodyBehindAppBar: true, // ✅ CLEF - Body derrière AppBar
+
+      // ✅ AppBar sticky avec animation background/couleur
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(70),
-        child: Container(
-          color: AppColors.background, // ✅ Couleur fixe pour CityPage
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          color: _isHeaderScrolled
+              ? (Theme.of(context).brightness == Brightness.dark
+              ? AppColors.backgroundDark
+              : AppColors.background)
+              : Colors.transparent,
           child: SafeArea(
             child: AppHeader(
               onSearchTap: () => _onSearchTap(context),
               searchText: 'Trouver des activités',
               iconColor: AppColors.accent,
-              locationTextStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.neutral800,
-              ),
+              locationTextColor: _isHeaderScrolled
+                  ? (Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white
+                  : AppColors.primary)
+                  : Colors.white,
             ),
           ),
         ),
       ),
-      // ✅ BODY avec CustomScrollView standard (pas de SliverAppBar)
-      body: CustomScrollView(
-        key: const PageStorageKey('city_scroll'),
-        primary: true,
-        physics: scrollPhysics,
-        slivers: [
-          // ✅ PLUS de SliverAppBar - commencer directement par le contenu
 
-          // 1. Espacement après la barre
-          SliverToBoxAdapter(
-            child: SizedBox(height: AppDimensions.spacingM),
-          ),
+      body: MediaQuery.removePadding(
+        context: context,
+        removeTop: true, // ✅ Supprime le padding du haut
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (notification is ScrollUpdateNotification && notification.depth == 0) {
+              final isScrolled = notification.metrics.pixels > 200; // ✅ Seuil adapté à la cover
+              if (isScrolled != _isHeaderScrolled) {
+                setState(() => _isHeaderScrolled = isScrolled);
+              }
+            }
+            return false;
+          },
+          child: CustomScrollView(
+            key: const PageStorageKey('city_scroll'),
+            primary: true,
+            physics: scrollPhysics,
+            slivers: [
+              // 1. Cover défilable
+              SliverPersistentHeader(
+                pinned: false, // ✅ Cover défilable
+                delegate: experiencesAsync.when(
+                  data: (categories) => _buildCoverDelegate(context, categories, screenWidth),
+                  loading: () => CityPageCoverDelegateSkeleton(screenWidth: screenWidth),
+                  error: (_, __) => _buildCoverDelegate(context, [], screenWidth),
+                ),
+              ),
 
-          // 2. Contenu principal basé sur l'état
-          experiencesAsync.when(
-            data: (categories) => _buildCategorySections(context, categories),
-            loading: () => _buildLoadingSections(context),
-            error: (error, stackTrace) => _buildErrorSection(context, error),
-          ),
+              SliverToBoxAdapter(
+                child: SizedBox(height: AppDimensions.spacingM), // ✅ PADDING SOUS COVER
+              ),
 
-          // 3. Espacement final
-          SliverToBoxAdapter(
-            child: SizedBox(height: AppDimensions.spacingXl),
+              // 2. Contenu principal (carrousels)
+              experiencesAsync.when(
+                data: (categories) => _buildCategorySections(context, categories),
+                loading: () => _buildLoadingSections(context),
+                error: (error, stackTrace) => _buildErrorSection(context, error),
+              ),
+
+              // 3. Espacement final
+              SliverToBoxAdapter(
+                child: SizedBox(height: AppDimensions.spacingXl),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
-    );  }
+    );
+  }
 
   /// Construit les sections par catégorie avec des données
   Widget _buildCategorySections(BuildContext context, List<CategoryExperiences> categories) {
@@ -130,13 +172,12 @@ class CityPageTemplate extends ConsumerWidget {
               // Pour chaque section de la catégorie, créer un carousel
               ...categoryExp.sections.map((sectionExp) {
                 return Container(
-                  margin: EdgeInsets.only(bottom: AppDimensions.spacingM),
                   child: GenericExperienceCarousel(
-                    key: ValueKey('city-${cityId}-${categoryExp.category.id}-${sectionExp.section.id}'),
+                    key: ValueKey('city-${widget.cityId}-${categoryExp.category.id}-${sectionExp.section.id}'),
                     title: sectionExp.section.title,
                     experiences: sectionExp.experiences,
                     heroPrefix: 'city-${categoryExp.category.id}-${sectionExp.section.id}',
-                    openBuilder: openBuilder,
+                    openBuilder: widget.openBuilder,
                     showDistance: true,
                     onSeeAllPressed: () => _onSeeAllPressed(context, categoryExp.category, sectionExp.section),
                   ),
@@ -232,27 +273,30 @@ class CityPageTemplate extends ConsumerWidget {
   /// Retry en cas d'erreur
   void _retryLoading(BuildContext context) {
     // Le refresh sera géré automatiquement par Riverpod
-    print('🔄 Retry loading pour ville: $cityId');
+    print('🔄 Retry loading pour ville: ${widget.cityId}');
   }
 
-  /// Gère la navigation depuis la bottom bar
-  void _handleBottomNavigation(BuildContext context, BottomNavTab tab) {
-    switch (tab) {
-      case BottomNavTab.explorer:
-        Navigator.of(context).pushReplacementNamed('/category');
-        break;
-      case BottomNavTab.favoris:
-      // TODO: Navigation vers favoris
-        print('Navigation vers favoris');
-        break;
-      case BottomNavTab.visiter:
-      // Déjà sur la page ville, ne rien faire
-        break;
-      case BottomNavTab.profil:
-      // TODO: Navigation vers profil
-        print('Navigation vers profil');
-        break;
-    }
+  /// Construit le delegate de cover avec données
+  CityPageCoverDelegate _buildCoverDelegate(
+      BuildContext context,
+      List<CategoryExperiences> categories,
+      double screenWidth
+      ) {
+    final totalExperiences = categories.fold<int>(
+      0,
+          (sum, category) => sum + category.sections.fold<int>(
+        0,
+            (sectionSum, section) => sectionSum + section.experiences.length,
+      ),
+    );
+
+    final cityName = ref.read(selectedCityProvider)?.cityName ?? 'Ville inconnue';
+
+    return CityPageCoverDelegate(
+      cityName: cityName,
+      activityCount: totalExperiences,
+      screenWidth: screenWidth,
+    );
   }
 
   /// Gère la recherche dans la ville

@@ -146,7 +146,6 @@ class CategoryCoverDelegate extends SliverPersistentHeaderDelegate {
               ),
             ),
           ),
-          // NOUVEAU: Dégradé en haut de la cover (100px)
           Positioned(
             top: 0,
             left: 0,

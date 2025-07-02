@@ -22,11 +22,15 @@ class CityPicker extends ConsumerWidget {
   /// Taille de l'icône
   final double iconSize;
 
+  /// Couleur du texte de la ville
+  final Color? locationTextColor;
+
   const CityPicker({
     super.key,
     this.textStyle,
     this.iconColor = Colors.white,
     this.iconSize = 20,
+    this.locationTextColor,
   });
 
   void _showCityPicker(BuildContext context, WidgetRef ref) async {
@@ -57,7 +61,7 @@ class CityPicker extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final defaultTextStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-      color: Colors.white,
+      color: locationTextColor ?? Colors.white, // ✅ Utiliser locationTextColor si fourni
       shadows: [],
     );
 

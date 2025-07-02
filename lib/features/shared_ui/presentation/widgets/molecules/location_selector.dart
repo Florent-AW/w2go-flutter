@@ -12,12 +12,15 @@ class LocationSelector extends ConsumerWidget {
   final bool showIcon;
   final TextStyle? textStyle;
   final Color? iconColor;
+  final Color? locationTextColor;
+
 
   const LocationSelector({
     Key? key,
     this.showIcon = true,
     this.textStyle,
     this.iconColor,
+    this.locationTextColor,
   }) : super(key: key);
 
   @override
@@ -32,6 +35,7 @@ class LocationSelector extends ConsumerWidget {
         CityPicker(
           textStyle: textStyle,
           iconColor: iconColor ?? Colors.white,
+          locationTextColor: locationTextColor,
         ),
       ],
     );

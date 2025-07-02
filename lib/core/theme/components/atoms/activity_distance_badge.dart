@@ -36,8 +36,8 @@ class ActivityDistanceBadge extends ConsumerWidget {
       painter: _DirectionSignPainter(backgroundColor),
       child: Container(
         padding: EdgeInsets.only(
-          left: AppDimensions.spacingXs,      // ✅ Gauche normal
-          right: AppDimensions.spacingS,      // ✅ Droite plus large (16px au lieu de 12px)
+          left: AppDimensions.spacingXxs,      // ✅ Gauche normal
+          right: AppDimensions.spacingXs,      // ✅ Droite plus large (16px au lieu de 12px)
           top: AppDimensions.spacingXxxs,
           bottom: AppDimensions.spacingXxxs,
         ),
@@ -78,7 +78,7 @@ class _DirectionSignPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final path = Path();
-    final arrowWidth = 12.0; // ✅ Flèche plus longue
+    final arrowWidth = 10.0; // ✅ Flèche plus longue
     final radius = 4.0; // ✅ Rayon d'arrondi
 
     // Rectangle principal avec angles arrondis

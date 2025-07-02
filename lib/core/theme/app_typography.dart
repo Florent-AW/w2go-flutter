@@ -32,10 +32,19 @@ class AppTypography {
 
   // STYLES PRINCIPAUX
 
+  /// Titre principal (30px)
+  static TextStyle titleL({bool isDark = false}) => _getFont(
+    fontSize: 30,
+    fontWeight: FontWeight.w600,
+    letterSpacing: -0.5,
+    color: isDark ? Colors.white : AppColors.primary,
+    height: _lineHeightNormal,
+  );
+
   /// Titre principal (26px)
   static TextStyle titleM({bool isDark = false}) => _getFont(
     fontSize: 26,
-    fontWeight: FontWeight.bold,
+    fontWeight: FontWeight.w600,
     letterSpacing: -0.5,
     color: isDark ? Colors.white : AppColors.primary,
     height: _lineHeightNormal,
@@ -44,7 +53,7 @@ class AppTypography {
   /// Titre principal (24px)
   static TextStyle title({bool isDark = false}) => _getFont(
     fontSize: 24,
-    fontWeight: FontWeight.bold,
+    fontWeight: FontWeight.w600,
     letterSpacing: -0.5,
     color: isDark ? Colors.white : AppColors.primary,
     height: _lineHeightNormal,
@@ -53,7 +62,7 @@ class AppTypography {
   /// Titre secondaire (22px)
   static TextStyle titleS({bool isDark = false}) => _getFont(
     fontSize: 22,
-    fontWeight: FontWeight.bold,
+    fontWeight: FontWeight.w600,
     letterSpacing: -0.5,
     color: isDark ? Colors.white : AppColors.primary,
     height: _lineHeightNormal,
@@ -265,6 +274,7 @@ extension TextStyleExtension on BuildContext {
   bool get isDark => Theme.of(this).brightness == Brightness.dark;
 
   TextStyle get title => AppTypography.title(isDark: isDark);
+  TextStyle get titleL => AppTypography.titleL(isDark: isDark);
   TextStyle get titleM => AppTypography.titleM(isDark: isDark);
   TextStyle get titleS => AppTypography.titleS(isDark: isDark);
   TextStyle get titleXs => AppTypography.titleXs(isDark: isDark);

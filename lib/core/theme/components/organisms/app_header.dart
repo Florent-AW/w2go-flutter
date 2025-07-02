@@ -15,16 +15,18 @@ class AppHeader extends StatelessWidget {
   final Color? iconColor;
   final EdgeInsets? padding;
   final double? height;
+  final Color? locationTextColor;
 
   const AppHeader({
     Key? key,
     this.onSearchTap,
     this.showLocationIcon = true,
-    this.searchText = 'Trouvez des activités',
+    this.searchText = 'Trouver des activités',
     this.locationTextStyle,
     this.iconColor,
     this.padding,
     this.height,
+    this.locationTextColor,
   }) : super(key: key);
 
   @override
@@ -45,6 +47,7 @@ class AppHeader extends StatelessWidget {
             showIcon: showLocationIcon,
             textStyle: locationTextStyle,
             iconColor: iconColor ?? AppColors.accent,
+            locationTextColor: locationTextColor,
           ),
 
           // Espace flexible
