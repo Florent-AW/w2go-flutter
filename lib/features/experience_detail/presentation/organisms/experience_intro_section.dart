@@ -5,9 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/domain/models/shared/experience_item.dart';
 import '../../../../core/theme/app_dimensions.dart';
 import '../../../../features/shared_ui/presentation/widgets/atoms/event_date_badge.dart';
-import '../molecules/experience_title_info.dart';
 import '../../application/providers/experience_detail_providers.dart';
 import '../molecules/experience_title_info.dart';
+
 
 /// Section intro unifiée pour Activities + Events
 class ExperienceIntroSection extends ConsumerWidget {

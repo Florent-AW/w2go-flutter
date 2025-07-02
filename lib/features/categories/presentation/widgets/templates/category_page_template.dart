@@ -6,6 +6,7 @@ import 'package:skeletonizer/skeletonizer.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_interactions.dart';
 import '../../../../../core/theme/app_dimensions.dart';
+import '../../../../../core/theme/components/organisms/app_header.dart';
 import '../../../../../core/domain/models/shared/category_view_model.dart';
 import '../../../../../core/domain/models/shared/subcategory_model.dart';
 import '../../../../../core/domain/models/activity/search/searchable_activity.dart';
@@ -17,7 +18,6 @@ import '../atoms/subcategory_tab.dart';
 import '../delegates/subcategory_tabs_delegate.dart';
 import '../delegates/category_cover_with_tabs_delegate.dart';
 import '../organisms/subcategory_activities_section.dart';
-import '../organisms/category_header.dart';
 import '../organisms/featured_section_organism.dart';
 
 
@@ -240,24 +240,21 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
         preferredSize: Size.fromHeight(70),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          color: _isHeaderScrolled
-              ? AppColors.blueBackground
-              : Colors.transparent,
+          color: _isHeaderScrolled ? AppColors.blueBackground : Colors.transparent,
           child: SafeArea(
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: AppDimensions.spacingS,
-                // Utiliser la constante appropriée de vos AppDimensions
-                vertical: 8,
+            child: AppHeader(
+              onSearchTap: widget.onSearchTap,
+              searchText: 'Trouvez des activités',
+              iconColor: Colors.white,
+              locationTextStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.white,
+                shadows: [],
               ),
-              child: CategoryHeader(
-                onSearchTap: widget.onSearchTap,
-              ),
+              // ✅ Padding et height gérés dans AppHeader
             ),
           ),
         ),
-      ),
-      body: MediaQuery.removePadding(
+      ),      body: MediaQuery.removePadding(
         context: context,
         removeTop: true,
         child: RepaintBoundary(
@@ -387,12 +384,9 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
           ),
         ),
       ),
-      bottomNavigationBar: GenericBottomBar( // ✅ AJOUTER cette section
+      bottomNavigationBar: GenericBottomBar(
         selectedTab: BottomNavTab.explorer,
-        onTabSelected: (tab) {
-          // TODO : Navigation vers les autres sections
-          print('Navigation vers : $tab');
-        },
+        // ✅ Plus besoin de onTabSelected - la navigation est automatique
       ),
     );
   }

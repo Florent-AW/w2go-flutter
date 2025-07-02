@@ -18,6 +18,13 @@ class RouteNames {
   static const String eventDetails = '/event-details';
   static const String eventDetailsWithId = '/event-details/:id';
   static const String search = '/search';
+  static const String city = '/city';
+  static const String cityWithId = '/city/:id';
+
+// Méthode utilitaire pour générer une route de ville avec un ID spécifique
+  static String getCityRoute(String cityId) {
+    return '$city/$cityId';
+  }
 
   // Méthode utilitaire pour générer une route d'activité avec un ID spécifique
   static String getActivityDetailsRoute(String activityId) {

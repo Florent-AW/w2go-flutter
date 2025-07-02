@@ -6,7 +6,7 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_dimensions.dart';
 import '../../../../../core/theme/components/atoms/action_button.dart';
 
-enum BottomNavTab { explorer, favoris, lyra, profil }
+enum BottomNavTab { explorer, favoris, visiter, profil }
 
 /// Molecule contenant les 4 boutons de navigation principale
 class NavigationButtonsRow extends StatelessWidget {
@@ -27,20 +27,16 @@ class NavigationButtonsRow extends StatelessWidget {
         // ✅ Barre d'indicateurs au-dessus
         Row(
           children: [
-            // SizedBox(width: AppDimensions.spacingS / 2),
-
             Expanded(child: _buildIndicator(BottomNavTab.explorer)),
             SizedBox(width: AppDimensions.spacingS),
 
             Expanded(child: _buildIndicator(BottomNavTab.favoris)),
             SizedBox(width: AppDimensions.spacingS),
 
-            Expanded(child: _buildIndicator(BottomNavTab.lyra)),
+            Expanded(child: _buildIndicator(BottomNavTab.visiter)),
             SizedBox(width: AppDimensions.spacingS),
 
             Expanded(child: _buildIndicator(BottomNavTab.profil)),
-
-            // SizedBox(width: AppDimensions.spacingS / 2),
           ],
         ),
 
@@ -49,27 +45,23 @@ class NavigationButtonsRow extends StatelessWidget {
         // ✅ Boutons en dessous (couleur normale)
         Row(
           children: [
-            // SizedBox(width: AppDimensions.spacingS / 2),
-
             Expanded(child: _buildNavItem(BottomNavTab.explorer, LucideIcons.compass, 'Explorer')),
             SizedBox(width: AppDimensions.spacingS),
 
             Expanded(child: _buildNavItem(BottomNavTab.favoris, LucideIcons.heart, 'Favoris')),
             SizedBox(width: AppDimensions.spacingS),
 
-            Expanded(child: _buildNavItem(BottomNavTab.lyra, LucideIcons.sparkles, 'Lyra')),
+            Expanded(child: _buildNavItem(BottomNavTab.visiter, LucideIcons.mapPin, 'Visiter')),
             SizedBox(width: AppDimensions.spacingS),
 
             Expanded(child: _buildNavItem(BottomNavTab.profil, LucideIcons.user, 'Profil')),
-
-            // SizedBox(width: AppDimensions.spacingS / 2),
           ],
         ),
       ],
     );
   }
 
-// ✅ Ajouter cette méthode
+  // ✅ Ajouter cette méthode
   Widget _buildIndicator(BottomNavTab tab) {
     final isSelected = selectedTab == tab;
 

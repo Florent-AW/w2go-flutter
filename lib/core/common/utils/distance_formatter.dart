@@ -17,7 +17,6 @@ class DistanceFormatter {
     if (distanceKm < 10) return "< 10 km";
     if (distanceKm < 25) return "< 25 km";
     if (distanceKm < 50) return "< 50 km";
-    if (distanceKm < 75) return "< 75 km";
     if (distanceKm < 100) return "< 100 km";
     if (distanceKm < 150) return "< 150 km";
     if (distanceKm < 200) return "< 200 km";

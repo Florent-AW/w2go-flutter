@@ -46,7 +46,7 @@ class ActivityDistanceBadge extends ConsumerWidget {
           style: AppTypography.caption(isDark: false).copyWith(
             color: Colors.white, // ✅ Toujours blanc
             fontWeight: FontWeight.w600,
-            fontSize: 12.0,
+            fontSize: 10.0,
           ),
         ),
       ),

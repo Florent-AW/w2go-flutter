@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/welcome/presentation/pages/welcome_page.dart';
 import '../features/categories/presentation/pages/category_page.dart';
+import '../features/city_page/presentation/pages/city_page.dart';
 import '../features/experience_detail/presentation/pages/experience_detail_page.dart';
 import '../core/domain/models/shared/experience_item.dart';
 import '../core/domain/models/activity/search/searchable_activity.dart';
@@ -89,6 +90,12 @@ class AppRouter {
           settings: settings,
         );
 
+      case RouteNames.city:
+        return MaterialPageRoute(
+          builder: (_) => const CityPage(),
+          settings: settings,
+        );
+
       default:
       // Gestion des routes avec ID de catégorie
         if (settings.name?.startsWith('/category/') ?? false) {
@@ -98,7 +105,16 @@ class AppRouter {
           );
         }
 
-        // ✅ Gestion des routes de détail d'événement (Navigation unifiée)
+        // Gestion des routes avec ID de ville
+        if (settings.name?.startsWith('/city/') ?? false) {
+          final cityId = settings.name?.split('/').last;
+          return MaterialPageRoute(
+            builder: (_) => CityPage(cityId: cityId),
+            settings: settings,
+          );
+        }
+
+        // Gestion des routes de détail d'événement (Navigation unifiée)
         if (settings.name?.startsWith('/event-details/') ?? false) {
           final Map<String, dynamic> args =
               settings.arguments as Map<String, dynamic>? ?? {};

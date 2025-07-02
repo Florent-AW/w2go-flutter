@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_dimensions.dart';
+import '../../../../../core/domain/models/shared/city_model.dart';
 import '../../../../search/application/state/city_selection_state.dart';
 import '../../../../search/application/state/place_details_notifier.dart';
-import '../organisms/city_picker_modal.dart';
+import '../../pages/city_picker_page.dart';
 
 /// Sélecteur de ville réutilisable
 /// Affiche la ville actuellement sélectionnée et permet d'ouvrir
@@ -28,17 +29,24 @@ class CityPicker extends ConsumerWidget {
     this.iconSize = 20,
   });
 
-  void _showCityPicker(BuildContext context, WidgetRef ref) {
-    // Réinitialiser l'état du détail de lieu avant d'ouvrir le modal
+  void _showCityPicker(BuildContext context, WidgetRef ref) async {
+    // Réinitialiser l'état du détail de lieu
     ref.read(placeDetailsNotifierProvider.notifier).reset();
 
-    // Ouvrir directement le modal
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => const CityPickerModal(),
+    // ✅ NOUVELLE APPROCHE : Utiliser CityPickerPage comme WelcomeForm
+    final city = await Navigator.of(context).push(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (context) => const CityPickerPage(),
+        )
     );
+
+    // Vérifier si une ville a été sélectionnée
+    if (city != null && city is City) {
+      // Mettre à jour le provider
+      ref.read(selectedCityProvider.notifier).selectCity(city);
+      // Note: Pas de navigation vers CategoryPage ici car on est déjà sur une page
+    }
   }
 
   String _formatCityName(String? cityName) {
