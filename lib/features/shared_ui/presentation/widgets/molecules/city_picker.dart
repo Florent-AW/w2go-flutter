@@ -2,11 +2,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_dimensions.dart';
 import '../../../../../core/domain/models/shared/city_model.dart';
 import '../../../../search/application/state/city_selection_state.dart';
 import '../../../../search/application/state/place_details_notifier.dart';
+import '../../../../preload/application/target_page_service.dart';
 import '../../pages/city_picker_page.dart';
 
 /// Sélecteur de ville réutilisable
@@ -37,7 +39,7 @@ class CityPicker extends ConsumerWidget {
     // Réinitialiser l'état du détail de lieu
     ref.read(placeDetailsNotifierProvider.notifier).reset();
 
-    // ✅ NOUVELLE APPROCHE : Utiliser CityPickerPage comme WelcomeForm
+    // Ouvrir CityPickerPage
     final city = await Navigator.of(context).push(
         MaterialPageRoute(
           fullscreenDialog: true,
@@ -47,9 +49,22 @@ class CityPicker extends ConsumerWidget {
 
     // Vérifier si une ville a été sélectionnée
     if (city != null && city is City) {
-      // Mettre à jour le provider
+      // ✅ Détecter le type de page cible
+      final targetPageType = TargetPageService.determineTargetPageType(context);
+
+      print('🎯 CITY PICKER: Ville sélectionnée: ${city.cityName}, target: $targetPageType');
+
+      // ✅ CORRECTION: Utiliser Navigator.pushNamed au lieu de context.go
+      Navigator.of(context).pushNamed(
+        '/loading',
+        arguments: {
+          'city': city,
+          'targetPageType': targetPageType,
+        },
+      );
+
+      // Mettre à jour le provider (pour les autres widgets)
       ref.read(selectedCityProvider.notifier).selectCity(city);
-      // Note: Pas de navigation vers CategoryPage ici car on est déjà sur une page
     }
   }
 

@@ -163,11 +163,11 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
         throw Exception('Ville non trouvée: $cityId');
       }
 
-      // 2. Récupérer les 6 catégories (toutes sauf événements) - ANCIENNE LOGIQUE
+      // 2. Récupérer les 6 catégories (toutes sauf événements)
       final allCategories = await ref.watch(categoriesProvider.future);
       const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
 
-      // Séparer activités et événements - COMME AVANT
+      // Séparer activités et événements
       final activityCategories = allCategories
           .where((cat) => cat.id != eventsCategoryId)
           .take(6) // Limiter à 6 catégories d'activités
@@ -178,13 +178,24 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
         orElse: () => Category(id: eventsCategoryId, name: 'Événements'),
       );
 
-      // 3. Charger en parallèle : 1 événements + 6 catégories activités (EVENTS EN PREMIER)
+      // ✅ NOUVEAU : Récupérer les vraies sections
+      final citySections = await _getCitySections();
+
+      // 3. Charger en parallèle avec les vraies sections
       final results = await Future.wait([
-        // ✅ ÉVÉNEMENTS EN PREMIER (correction 5)
-        _loadEventsCategoryExperiences(eventCategory, selectedCity, null),
-        // Puis activités par catégorie - COMME AVANT
+        // ✅ ÉVÉNEMENTS avec vraie section
+        _loadEventsCategoryExperiences(
+            eventCategory,
+            selectedCity,
+            citySections.where((s) => s.categoryId == eventCategory.id).firstOrNull
+        ),
+        // ✅ ACTIVITÉS avec vraies sections
         ...activityCategories.map((category) =>
-            _loadActivityCategoryExperiences(category, selectedCity, null)
+            _loadActivityCategoryExperiences(
+                category,
+                selectedCity,
+                citySections.where((s) => s.categoryId == category.id).firstOrNull
+            )
         ),
       ]);
 
@@ -240,20 +251,21 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
   Future<CategoryExperiences> _loadActivityCategoryExperiences(
       Category category,
       City city,
-      SectionMetadata? section,
-      ) async {
+      SectionMetadata? section, {
+        int? customLimit,
+      }) async {
     try {
       // Debug pour voir quelle catégorie on traite
       print('🔍 DEBUG: _loadActivityCategoryExperiences pour ${category.name} (id: "${category.id}")');
 
-      // ✅ Utiliser la section de la base ou fallback
+      // ✅ Utiliser customLimit en priorité, puis section, puis défaut
       final activitiesSectionId = section?.id ?? '5aa09feb-397a-4ad1-8142-7dcf0b2edd0f';
-      final limit = section?.filterConfig?['limit'] as int? ?? 20; // ✅ Limite configurable
+      final limit = customLimit ?? section?.filterConfig?['limit'] as int? ?? 20;
 
       final experiences = await _retry(() async {
         return await ref.read(cityActivitiesBySectionProvider((
         sectionId: activitiesSectionId,
-        categoryId: category.id, // ✅ Debug: vérifier cette valeur
+        categoryId: category.id,
         city: city,
         limit: limit,
         )).future).timeout(const Duration(seconds: 10));
@@ -264,7 +276,7 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
       final sectionExp = SectionExperiences(
         section: section ?? SectionMetadata(
           id: activitiesSectionId,
-          title: category.name, // ✅ Correction 3: Nom depuis la catégorie
+          title: category.name,
           sectionType: 'city_featured',
           priority: 1,
           categoryId: category.id,
@@ -294,19 +306,20 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
   Future<CategoryExperiences> _loadEventsCategoryExperiences(
       Category eventCategory,
       City city,
-      SectionMetadata? section, // ✅ NOUVEAU paramètre
-      ) async {
+      SectionMetadata? section, {
+        int? customLimit,  // ✅ CORRECTION : paramètre optionnel nommé
+      }) async {
     try {
-      // ✅ Utiliser la section de la base ou fallback
+      // ✅ Utiliser customLimit en priorité, puis section, puis défaut
       final eventsSectionId = section?.id ?? '7f94df23-ab30-4bf3-afb2-59320e5466a7';
-      final limit = section?.filterConfig?['limit'] as int? ?? 15; // ✅ Limite configurable
+      final limit = customLimit ?? section?.filterConfig?['limit'] as int? ?? 15;
 
       final experiences = await _retry(() async {
         return await ref.read(cityEventsBySectionProvider((
         sectionId: eventsSectionId,
         categoryId: eventCategory.id,
         city: city,
-        limit: limit, // ✅ Limite depuis la base
+        limit: limit,
         )).future).timeout(const Duration(seconds: 10));
       });
 
@@ -315,7 +328,7 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
       final sectionExp = SectionExperiences(
         section: section ?? SectionMetadata(
           id: eventsSectionId,
-          title: eventCategory.name, // ✅ Nom depuis la catégorie au lieu de hardcodé
+          title: eventCategory.name,
           sectionType: 'city_featured',
           priority: 2,
           categoryId: eventCategory.id,
@@ -353,6 +366,37 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
   Future<void> refresh() async {
     ref.invalidateSelf();
   }
+
+  /// Méthodes publiques pour le PreloadController
+  /// Charge une catégorie d'activités avec limite personnalisée
+  Future<CategoryExperiences> loadActivityCategoryWithLimit(
+      Category category,
+      City city,
+      int customLimit,
+      ) async {
+    return await _loadActivityCategoryExperiences(
+      category,
+      city,
+      null, // pas de section spécifique
+      customLimit: customLimit,
+    );
+  }
+
+  /// Charge les événements avec limite personnalisée
+  Future<CategoryExperiences> loadEventsCategoryWithLimit(
+      Category eventCategory,
+      City city,
+      int customLimit,
+      ) async {
+    return await _loadEventsCategoryExperiences(
+      eventCategory,
+      city,
+      null, // pas de section spécifique
+      customLimit: customLimit,
+    );
+  }
+
+
 }
 
 /// Provider principal pour le controller
@@ -371,4 +415,9 @@ final hasCityContentProvider = Provider.family<bool, String?>((ref, cityId) {
     loading: () => false,
     error: (_, __) => false,
   );
+});
+
+/// Provider pour accéder aux méthodes publiques du controller
+final cityExperiencesControllerInstanceProvider = Provider.family<CityExperiencesController, String?>((ref, cityId) {
+  return ref.read(cityExperiencesControllerProvider(cityId).notifier);
 });
