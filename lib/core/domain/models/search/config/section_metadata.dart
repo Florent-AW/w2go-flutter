@@ -13,6 +13,8 @@ class SectionMetadata with _$SectionMetadata {
     @JsonKey(name: 'section_type') required String sectionType,
     required int priority,
     @JsonKey(name: 'category_id') String? categoryId,
+    @JsonKey(name: 'display_order') @Default(999) int displayOrder, // ✅ NOUVEAU
+    @JsonKey(name: 'filter_config') Map<String, dynamic>? filterConfig, // ✅ NOUVEAU
   }) = _SectionMetadata;
 
   factory SectionMetadata.fromJson(Map<String, dynamic> json) =>

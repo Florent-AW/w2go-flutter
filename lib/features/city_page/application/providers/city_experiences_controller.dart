@@ -14,6 +14,24 @@ import '../../../search/application/state/activity_providers.dart';
 import '../../../search/application/state/event_providers.dart';
 import '../../../../core/domain/ports/providers/search/activity_distance_manager_providers.dart';
 
+/// Utility to retry an asynchronous action with a delay.
+Future<T> _retry<T>(
+    Future<T> Function() action, {
+      int retries = 2,
+      Duration delay = const Duration(milliseconds: 500),
+    }) async {
+  for (var attempt = 0; attempt < retries; attempt++) {
+    try {
+      return await action();
+    } catch (_) {
+      if (attempt == retries - 1) rethrow;
+      await Future.delayed(delay);
+    }
+  }
+  throw Exception('Unreachable');
+}
+
+
 /// Modèle pour organiser les expériences d'une catégorie
 class CategoryExperiences {
   final Category category;
@@ -55,18 +73,19 @@ class SectionExperiences {
 }
 
 /// Provider spécifique VillePage pour activités (accepte categoryId nullable)
-final cityActivitiesBySectionProvider = FutureProvider.family<List<ExperienceItem>, ({String sectionId, String? categoryId, City city})>((ref, params) async {
+final cityActivitiesBySectionProvider = FutureProvider.family<List<ExperienceItem>, ({String sectionId, String? categoryId, City city, int limit})>((ref, params) async {
   final sectionId = params.sectionId;
   final categoryId = params.categoryId;
   final city = params.city;
+  final limit = params.limit; // ✅ NOUVEAU
 
   try {
     final activities = await ref.read(getActivitiesUseCaseProvider).execute(
       latitude: city.lat,
       longitude: city.lon,
       sectionId: sectionId,
-      categoryId: categoryId, // ✅ Le use case accepte nullable
-      limit: 30,
+      categoryId: categoryId,
+      limit: limit, // ✅ Utiliser le paramètre au lieu de 30
     );
 
     // Cache des distances
@@ -81,7 +100,7 @@ final cityActivitiesBySectionProvider = FutureProvider.family<List<ExperienceIte
     }
 
     final experiences = activities.map((activity) => ExperienceItem.activity(activity)).toList();
-    print('✅ CITY Section $sectionId: ${experiences.length} activités (categoryId: $categoryId)');
+    print('✅ CITY Section $sectionId: ${experiences.length} activités (categoryId: $categoryId, limit: $limit)');
     return experiences;
   } catch (e) {
     print('❌ CITY Erreur section $sectionId: $e');
@@ -90,10 +109,11 @@ final cityActivitiesBySectionProvider = FutureProvider.family<List<ExperienceIte
 });
 
 /// Provider spécifique VillePage pour événements (signature cohérente)
-final cityEventsBySectionProvider = FutureProvider.family<List<ExperienceItem>, ({String sectionId, String? categoryId, City city})>((ref, params) async {
+final cityEventsBySectionProvider = FutureProvider.family<List<ExperienceItem>, ({String sectionId, String? categoryId, City city, int limit})>((ref, params) async {
   final sectionId = params.sectionId;
   final categoryId = params.categoryId;
   final city = params.city;
+  final limit = params.limit; // ✅ NOUVEAU
 
   // Les événements doivent avoir un categoryId non-null
   if (categoryId == null) return [];
@@ -104,7 +124,7 @@ final cityEventsBySectionProvider = FutureProvider.family<List<ExperienceItem>, 
       longitude: city.lon,
       sectionId: sectionId,
       categoryId: categoryId,
-      limit: 30,
+      limit: limit, // ✅ Utiliser le paramètre au lieu de 30
     );
 
     // Cache des distances
@@ -119,13 +139,14 @@ final cityEventsBySectionProvider = FutureProvider.family<List<ExperienceItem>, 
     }
 
     final experiences = events.map((event) => ExperienceItem.event(event)).toList();
-    print('✅ CITY Section $sectionId: ${experiences.length} événements');
+    print('✅ CITY Section $sectionId: ${experiences.length} événements (limit: $limit)');
     return experiences;
   } catch (e) {
     print('❌ CITY Erreur section $sectionId: $e');
     return [];
   }
 });
+
 
 /// Controller pour gérer les expériences par ville
 /// Utilise FamilyAsyncNotifier pour cache granulaire par ville
@@ -142,11 +163,11 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
         throw Exception('Ville non trouvée: $cityId');
       }
 
-      // 2. Récupérer les 6 catégories (toutes sauf événements)
+      // 2. Récupérer les 6 catégories (toutes sauf événements) - ANCIENNE LOGIQUE
       final allCategories = await ref.watch(categoriesProvider.future);
       const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
 
-      // Séparer activités et événements
+      // Séparer activités et événements - COMME AVANT
       final activityCategories = allCategories
           .where((cat) => cat.id != eventsCategoryId)
           .take(6) // Limiter à 6 catégories d'activités
@@ -159,11 +180,11 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
 
       // 3. Charger en parallèle : 1 événements + 6 catégories activités (EVENTS EN PREMIER)
       final results = await Future.wait([
-        // ✅ ÉVÉNEMENTS EN PREMIER
-        _loadEventsCategoryExperiences(eventCategory, selectedCity),
-        // Puis activités par catégorie
+        // ✅ ÉVÉNEMENTS EN PREMIER (correction 5)
+        _loadEventsCategoryExperiences(eventCategory, selectedCity, null),
+        // Puis activités par catégorie - COMME AVANT
         ...activityCategories.map((category) =>
-            _loadActivityCategoryExperiences(category, selectedCity)
+            _loadActivityCategoryExperiences(category, selectedCity, null)
         ),
       ]);
 
@@ -187,11 +208,14 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
     try {
       final client = Supabase.instance.client;
 
-      final response = await client
-          .from('merged_filter_config')
-          .select('section_id, title, priority, section_type, category_id')
-          .eq('section_type', 'city_featured')
-          .order('priority');
+      final response = await _retry(
+            () => client
+            .from('merged_filter_config')
+            .select('section_id, title, priority, section_type, category_id, display_order, filter_config')
+            .eq('section_type', 'city_featured')
+            .order('display_order') // ✅ Utiliser display_order pour l'ordre
+            .timeout(const Duration(seconds: 10)),
+      );
 
       final sections = (response as List).map((json) => SectionMetadata(
         id: json['section_id'],
@@ -199,9 +223,11 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
         sectionType: json['section_type'],
         priority: json['priority'],
         categoryId: json['category_id'],
+        displayOrder: json['display_order'] ?? 999, // ✅ NOUVEAU
+        filterConfig: json['filter_config'] as Map<String, dynamic>?, // ✅ NOUVEAU
       )).toList();
 
-      print('📊 CITY SECTIONS: ${sections.length} sections city_featured trouvées');
+      print('📊 CITY SECTIONS: ${sections.length} sections city_featured trouvées depuis la base');
       return sections;
 
     } catch (e) {
@@ -210,92 +236,48 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
     }
   }
 
-  /// Charge les expériences d'une section VillePage
-  Future<CategoryExperiences> _loadCitySectionExperiences(
-      SectionMetadata section,
-      City city
-      ) async {
-    try {
-      // Déterminer le type d'expériences selon la section
-      const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
-      final isEventsSection = section.categoryId == eventsCategoryId;
 
-      // ✅ CORRECTION: Utiliser les providers spécifiques VillePage
-      final experiences = await ref.read(
-          isEventsSection
-              ? cityEventsBySectionProvider((
-          sectionId: section.id,
-          categoryId: section.categoryId,
-          city: city,
-          )).future
-              : cityActivitiesBySectionProvider((
-          sectionId: section.id,
-          categoryId: section.categoryId, // ✅ Peut être null maintenant
-          city: city,
-          )).future
-      );
-
-      // Créer une pseudo-catégorie pour l'affichage
-      final pseudoCategory = Category(
-        id: section.id,
-        name: section.title,
-      );
-
-      final sectionExp = SectionExperiences(
-        section: section,
-        experiences: experiences,
-      );
-
-      print('✅ CITY SECTION: ${section.title} → ${experiences.length} expériences');
-
-      return CategoryExperiences(
-        category: pseudoCategory,
-        sections: experiences.isNotEmpty ? [sectionExp] : [],
-      );
-
-    } catch (e) {
-      print('❌ CITY SECTION: Erreur ${section.title}: $e');
-      return CategoryExperiences(
-        category: Category(id: section.id, name: section.title),
-        sections: [],
-        error: e.toString(),
-      );
-    }
-  }
-
-  /// Charge les activités d'une catégorie avec section générique
   Future<CategoryExperiences> _loadActivityCategoryExperiences(
       Category category,
-      City city
+      City city,
+      SectionMetadata? section,
       ) async {
     try {
-      // Utiliser la section générique activités
-      const String activitiesSectionId = '5aa09feb-397a-4ad1-8142-7dcf0b2edd0f';
+      // Debug pour voir quelle catégorie on traite
+      print('🔍 DEBUG: _loadActivityCategoryExperiences pour ${category.name} (id: "${category.id}")');
 
-      final experiences = await ref.read(
-          cityActivitiesBySectionProvider((
-          sectionId: activitiesSectionId,
-          categoryId: category.id, // ✅ Spécifier la catégorie
-          city: city,
-          )).future
-      );
+      // ✅ Utiliser la section de la base ou fallback
+      final activitiesSectionId = section?.id ?? '5aa09feb-397a-4ad1-8142-7dcf0b2edd0f';
+      final limit = section?.filterConfig?['limit'] as int? ?? 20; // ✅ Limite configurable
+
+      final experiences = await _retry(() async {
+        return await ref.read(cityActivitiesBySectionProvider((
+        sectionId: activitiesSectionId,
+        categoryId: category.id, // ✅ Debug: vérifier cette valeur
+        city: city,
+        limit: limit,
+        )).future).timeout(const Duration(seconds: 10));
+      });
+
+      final experiencesList = experiences ?? <ExperienceItem>[];
 
       final sectionExp = SectionExperiences(
-        section: SectionMetadata(
+        section: section ?? SectionMetadata(
           id: activitiesSectionId,
-          title: category.name,
+          title: category.name, // ✅ Correction 3: Nom depuis la catégorie
           sectionType: 'city_featured',
           priority: 1,
           categoryId: category.id,
+          displayOrder: 999,
         ),
-        experiences: experiences,
+        experiences: experiencesList,
       );
 
-      print('✅ CITY CATEGORY: ${category.name} → ${experiences.length} activités');
+      print('✅ CITY CATEGORY: ${category.name} → ${experiencesList.length} activités (limit: $limit)');
 
       return CategoryExperiences(
         category: category,
-        sections: experiences.isNotEmpty ? [sectionExp] : [],
+        sections: experiencesList.isNotEmpty ? [sectionExp] : [],
       );
 
     } catch (e) {
@@ -311,36 +293,42 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
   /// Charge les événements avec section spécialisée
   Future<CategoryExperiences> _loadEventsCategoryExperiences(
       Category eventCategory,
-      City city
+      City city,
+      SectionMetadata? section, // ✅ NOUVEAU paramètre
       ) async {
     try {
-      // Utiliser la section spécialisée événements
-      const String eventsSectionId = '7f94df23-ab30-4bf3-afb2-59320e5466a7';
+      // ✅ Utiliser la section de la base ou fallback
+      final eventsSectionId = section?.id ?? '7f94df23-ab30-4bf3-afb2-59320e5466a7';
+      final limit = section?.filterConfig?['limit'] as int? ?? 15; // ✅ Limite configurable
 
-      final experiences = await ref.read(
-          cityEventsBySectionProvider((
-          sectionId: eventsSectionId,
-          categoryId: eventCategory.id,
-          city: city,
-          )).future
-      );
+      final experiences = await _retry(() async {
+        return await ref.read(cityEventsBySectionProvider((
+        sectionId: eventsSectionId,
+        categoryId: eventCategory.id,
+        city: city,
+        limit: limit, // ✅ Limite depuis la base
+        )).future).timeout(const Duration(seconds: 10));
+      });
+
+      final experiencesList = experiences ?? <ExperienceItem>[];
 
       final sectionExp = SectionExperiences(
-        section: SectionMetadata(
+        section: section ?? SectionMetadata(
           id: eventsSectionId,
-          title: 'Événements à venir',
+          title: eventCategory.name, // ✅ Nom depuis la catégorie au lieu de hardcodé
           sectionType: 'city_featured',
           priority: 2,
           categoryId: eventCategory.id,
+          displayOrder: 999,
         ),
-        experiences: experiences,
+        experiences: experiencesList,
       );
 
-      print('✅ CITY EVENTS: Événements → ${experiences.length} événements');
+      print('✅ CITY EVENTS: ${eventCategory.name} → ${experiencesList.length} événements (limit: $limit)');
 
       return CategoryExperiences(
         category: eventCategory,
-        sections: experiences.isNotEmpty ? [sectionExp] : [],
+        sections: experiencesList.isNotEmpty ? [sectionExp] : [],
       );
 
     } catch (e) {

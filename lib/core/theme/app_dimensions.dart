@@ -228,25 +228,30 @@ class AppDimensions {
   /// Returns: Largeur calculée, jamais < carouselMinCardWidth
   /// Calcule la largeur optimale d'une card de carousel
   static double calculateCarouselCardWidth(BoxConstraints constraints) {
-    final availableWidth = constraints.maxWidth;
+    return calculateCarouselCardWidthFromWidth(constraints.maxWidth);
+  }
+
+  /// Nouveau helper : calcule la largeur d'une card à partir d'une largeur maximale
+  static double calculateCarouselCardWidthFromWidth(double maxWidth) {
+    final constraints = BoxConstraints(maxWidth: maxWidth);
     final cardCount = getCarouselCardCount(constraints);
 
     // ✅ NOUVEAU : Peeking fixe de 10px au lieu d'adaptatif
-    const peekWidth = 16.0; // ✅ Fixe à 10px comme demandé
+    const peekWidth = 16.0;
 
     // Padding horizontal du carousel (left + right)
     const horizontalPadding = spacingS * 2; // 32px (16px * 2)
 
     // Spacing entre les cards
-    final spacingBetween = spacingS * (cardCount - 1); // 16px entre cards
+    final spacingBetween = spacingS * (cardCount - 1);
 
     // Calcul largeur brute
-    final calculatedWidth = (availableWidth - horizontalPadding - spacingBetween - peekWidth) / cardCount;
+    final calculatedWidth =
+        (maxWidth - horizontalPadding - spacingBetween - peekWidth) / cardCount;
 
     // ✅ Validation largeur minimale pour lisibilité
-    final finalWidth = calculatedWidth.clamp(carouselMinCardWidth, double.infinity);
+    return calculatedWidth.clamp(carouselMinCardWidth, double.infinity);
 
-    return finalWidth;
   }
 
   /// Méthode helper pour LayoutBuilder dans les carousels
@@ -275,7 +280,7 @@ class AppDimensions {
     for (final size in testSizes) {
       final constraints = BoxConstraints(maxWidth: size.width);
       final cardCount = getCarouselCardCount(constraints);
-      final cardWidth = calculateCarouselCardWidth(constraints);
+      final cardWidth = calculateCarouselCardWidthFromWidth(size.width);
 
       results[size.name] = {
         'width': size.width,

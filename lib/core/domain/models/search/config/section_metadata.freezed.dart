@@ -27,6 +27,10 @@ mixin _$SectionMetadata {
   int get priority => throw _privateConstructorUsedError;
   @JsonKey(name: 'category_id')
   String? get categoryId => throw _privateConstructorUsedError;
+  @JsonKey(name: 'display_order')
+  int get displayOrder => throw _privateConstructorUsedError; // ✅ NOUVEAU
+  @JsonKey(name: 'filter_config')
+  Map<String, dynamic>? get filterConfig => throw _privateConstructorUsedError;
 
   /// Serializes this SectionMetadata to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -49,7 +53,9 @@ abstract class $SectionMetadataCopyWith<$Res> {
       String title,
       @JsonKey(name: 'section_type') String sectionType,
       int priority,
-      @JsonKey(name: 'category_id') String? categoryId});
+      @JsonKey(name: 'category_id') String? categoryId,
+      @JsonKey(name: 'display_order') int displayOrder,
+      @JsonKey(name: 'filter_config') Map<String, dynamic>? filterConfig});
 }
 
 /// @nodoc
@@ -72,6 +78,8 @@ class _$SectionMetadataCopyWithImpl<$Res, $Val extends SectionMetadata>
     Object? sectionType = null,
     Object? priority = null,
     Object? categoryId = freezed,
+    Object? displayOrder = null,
+    Object? filterConfig = freezed,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -94,6 +102,14 @@ class _$SectionMetadataCopyWithImpl<$Res, $Val extends SectionMetadata>
           ? _value.categoryId
           : categoryId // ignore: cast_nullable_to_non_nullable
               as String?,
+      displayOrder: null == displayOrder
+          ? _value.displayOrder
+          : displayOrder // ignore: cast_nullable_to_non_nullable
+              as int,
+      filterConfig: freezed == filterConfig
+          ? _value.filterConfig
+          : filterConfig // ignore: cast_nullable_to_non_nullable
+              as Map<String, dynamic>?,
     ) as $Val);
   }
 }
@@ -111,7 +127,9 @@ abstract class _$$SectionMetadataImplCopyWith<$Res>
       String title,
       @JsonKey(name: 'section_type') String sectionType,
       int priority,
-      @JsonKey(name: 'category_id') String? categoryId});
+      @JsonKey(name: 'category_id') String? categoryId,
+      @JsonKey(name: 'display_order') int displayOrder,
+      @JsonKey(name: 'filter_config') Map<String, dynamic>? filterConfig});
 }
 
 /// @nodoc
@@ -132,6 +150,8 @@ class __$$SectionMetadataImplCopyWithImpl<$Res>
     Object? sectionType = null,
     Object? priority = null,
     Object? categoryId = freezed,
+    Object? displayOrder = null,
+    Object? filterConfig = freezed,
   }) {
     return _then(_$SectionMetadataImpl(
       id: null == id
@@ -154,6 +174,14 @@ class __$$SectionMetadataImplCopyWithImpl<$Res>
           ? _value.categoryId
           : categoryId // ignore: cast_nullable_to_non_nullable
               as String?,
+      displayOrder: null == displayOrder
+          ? _value.displayOrder
+          : displayOrder // ignore: cast_nullable_to_non_nullable
+              as int,
+      filterConfig: freezed == filterConfig
+          ? _value._filterConfig
+          : filterConfig // ignore: cast_nullable_to_non_nullable
+              as Map<String, dynamic>?,
     ));
   }
 }
@@ -166,7 +194,10 @@ class _$SectionMetadataImpl implements _SectionMetadata {
       required this.title,
       @JsonKey(name: 'section_type') required this.sectionType,
       required this.priority,
-      @JsonKey(name: 'category_id') this.categoryId});
+      @JsonKey(name: 'category_id') this.categoryId,
+      @JsonKey(name: 'display_order') this.displayOrder = 999,
+      @JsonKey(name: 'filter_config') final Map<String, dynamic>? filterConfig})
+      : _filterConfig = filterConfig;
 
   factory _$SectionMetadataImpl.fromJson(Map<String, dynamic> json) =>
       _$$SectionMetadataImplFromJson(json);
@@ -183,10 +214,25 @@ class _$SectionMetadataImpl implements _SectionMetadata {
   @override
   @JsonKey(name: 'category_id')
   final String? categoryId;
+  @override
+  @JsonKey(name: 'display_order')
+  final int displayOrder;
+// ✅ NOUVEAU
+  final Map<String, dynamic>? _filterConfig;
+// ✅ NOUVEAU
+  @override
+  @JsonKey(name: 'filter_config')
+  Map<String, dynamic>? get filterConfig {
+    final value = _filterConfig;
+    if (value == null) return null;
+    if (_filterConfig is EqualUnmodifiableMapView) return _filterConfig;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableMapView(value);
+  }
 
   @override
   String toString() {
-    return 'SectionMetadata(id: $id, title: $title, sectionType: $sectionType, priority: $priority, categoryId: $categoryId)';
+    return 'SectionMetadata(id: $id, title: $title, sectionType: $sectionType, priority: $priority, categoryId: $categoryId, displayOrder: $displayOrder, filterConfig: $filterConfig)';
   }
 
   @override
@@ -201,13 +247,24 @@ class _$SectionMetadataImpl implements _SectionMetadata {
             (identical(other.priority, priority) ||
                 other.priority == priority) &&
             (identical(other.categoryId, categoryId) ||
-                other.categoryId == categoryId));
+                other.categoryId == categoryId) &&
+            (identical(other.displayOrder, displayOrder) ||
+                other.displayOrder == displayOrder) &&
+            const DeepCollectionEquality()
+                .equals(other._filterConfig, _filterConfig));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, id, title, sectionType, priority, categoryId);
+  int get hashCode => Object.hash(
+      runtimeType,
+      id,
+      title,
+      sectionType,
+      priority,
+      categoryId,
+      displayOrder,
+      const DeepCollectionEquality().hash(_filterConfig));
 
   /// Create a copy of SectionMetadata
   /// with the given fields replaced by the non-null parameter values.
@@ -228,12 +285,14 @@ class _$SectionMetadataImpl implements _SectionMetadata {
 
 abstract class _SectionMetadata implements SectionMetadata {
   const factory _SectionMetadata(
-          {required final String id,
-          required final String title,
-          @JsonKey(name: 'section_type') required final String sectionType,
-          required final int priority,
-          @JsonKey(name: 'category_id') final String? categoryId}) =
-      _$SectionMetadataImpl;
+      {required final String id,
+      required final String title,
+      @JsonKey(name: 'section_type') required final String sectionType,
+      required final int priority,
+      @JsonKey(name: 'category_id') final String? categoryId,
+      @JsonKey(name: 'display_order') final int displayOrder,
+      @JsonKey(name: 'filter_config')
+      final Map<String, dynamic>? filterConfig}) = _$SectionMetadataImpl;
 
   factory _SectionMetadata.fromJson(Map<String, dynamic> json) =
       _$SectionMetadataImpl.fromJson;
@@ -250,6 +309,12 @@ abstract class _SectionMetadata implements SectionMetadata {
   @override
   @JsonKey(name: 'category_id')
   String? get categoryId;
+  @override
+  @JsonKey(name: 'display_order')
+  int get displayOrder; // ✅ NOUVEAU
+  @override
+  @JsonKey(name: 'filter_config')
+  Map<String, dynamic>? get filterConfig;
 
   /// Create a copy of SectionMetadata
   /// with the given fields replaced by the non-null parameter values.
