@@ -80,7 +80,8 @@ class _LoadingRouteState extends ConsumerState<LoadingRoute> {
   void _navigateToTarget() {
     switch (widget.targetPageType) {
       case 'city':
-        Navigator.of(context).pushReplacementNamed('/city/${widget.targetCity.id}');
+      // Naviguer vers la route principale "/city" pour conserver la bottom bar
+        Navigator.of(context).pushReplacementNamed('/city');
         break;
       case 'category':
       // ✅ CLEAN : LoadingRoute détermine la première catégorie
@@ -88,15 +89,17 @@ class _LoadingRouteState extends ConsumerState<LoadingRoute> {
         final firstCategory = categories.isNotEmpty ? categories.first : null;
 
         if (firstCategory != null) {
-          Navigator.of(context).pushReplacementNamed('/category/${firstCategory.id}');
+          // Utiliser la route principale "/category" pour afficher HomeShell
+          // La sélection sera initialisée avec la première catégorie
+          Navigator.of(context).pushReplacementNamed('/category');
         } else {
           // Fallback vers city si aucune catégorie
           print('⚠️ NAVIGATION: Aucune catégorie disponible, fallback vers city');
-          Navigator.of(context).pushReplacementNamed('/city/${widget.targetCity.id}');
+          Navigator.of(context).pushReplacementNamed('/city');
         }
         break;
       default:
-        Navigator.of(context).pushReplacementNamed('/city/${widget.targetCity.id}');
+        Navigator.of(context).pushReplacementNamed('/city');
     }
   }
 
