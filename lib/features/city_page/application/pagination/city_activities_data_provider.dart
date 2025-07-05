@@ -110,10 +110,12 @@ class CityActivitiesDataProvider extends ExperienceDataProvider {
         items = activities.map((activity) => ExperienceItem.activity(activity)).toList();
       }
 
-      final hasMore = items.length >= limit; // Simple heuristic
+      final hasMore = items.length == limit;
       final nextOffset = offset + items.length;
 
+      // ✅ DEBUG : Logger pour comprendre les cas limites
       print('✅ CITY PAGINATION: ${items.length} items loaded, hasMore=$hasMore, nextOffset=$nextOffset');
+      print('   📊 DEBUG: requested=$limit, received=${items.length}, ratio=${items.length}/$limit');
 
       return PaginatedResult(
         items: items,

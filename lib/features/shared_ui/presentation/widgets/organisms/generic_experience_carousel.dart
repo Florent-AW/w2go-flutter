@@ -37,6 +37,7 @@ class GenericExperienceCarousel extends ConsumerStatefulWidget {
   final String? heroPrefix;
   final bool isPartial;
   final VoidCallback? onRequestCompletion;
+  final VoidCallback? onLoadMore;
 
   const GenericExperienceCarousel({
     Key? key,
@@ -54,6 +55,7 @@ class GenericExperienceCarousel extends ConsumerStatefulWidget {
     this.heroPrefix,
     this.isPartial = false,
     this.onRequestCompletion,
+    this.onLoadMore,
   }) : super(key: key);
 
   @override
@@ -62,13 +64,15 @@ class GenericExperienceCarousel extends ConsumerStatefulWidget {
 
 class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCarousel> {
   Timer? _completionTimer;
+  int _lastTriggerIndex = -1;
 
   @override
   void initState() {
     super.initState();
 
-    // ✅ NOUVEAU : Déclencher complétion automatique si partiel
+    // ✅ Timer immédiat si déjà partiel dès initState (ancien comportement)
     if (widget.isPartial && widget.onRequestCompletion != null) {
+      print('🔄 TIMER T1: Démarrage immédiat pour ${widget.title}');
       _scheduleCompletion();
     }
   }
@@ -89,6 +93,23 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
     });
   }
 
+  /// ✅ NOUVEAU : Détecte si on doit charger plus d'items
+  void _checkLoadMore(int currentIndex) {
+    // Éviter triggers multiples au même index
+    if (currentIndex <= _lastTriggerIndex) return;
+
+    final totalItems = widget.experiences?.length ?? 0;
+
+    // Trigger au 5ème item depuis la fin (ou position configurable)
+    const triggerPosition = 5;
+    final shouldTrigger = currentIndex >= (totalItems - triggerPosition);
+
+    if (shouldTrigger && widget.onLoadMore != null) {
+      print('🔄 T2 LAZY LOADING: Trigger à l\'index $currentIndex/$totalItems');
+      _lastTriggerIndex = currentIndex;
+      widget.onLoadMore!();
+    }
+  }
 
 
   @override
@@ -195,10 +216,14 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
     // ✅ SUPPRIMÉ : La vérification isEmpty est maintenant dans build()
     // À ce stade, on est sûr d'avoir des expériences non vides
 
-    // ✅ Pré-calculer les distances
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _precacheDistancesIfNeeded(widget.experiences!, ref, allDistances);
-    });
+    // Pré-calculer les distances avec garde
+    if (widget.experiences?.isNotEmpty == true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) { // ✅ Garde mounted
+          _precacheDistancesIfNeeded(widget.experiences!, ref, allDistances);
+        }
+      });
+    }
 
     // ✅ Carousel avec données
     return AppDimensions.buildResponsiveCarousel(
@@ -221,6 +246,8 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
               itemExtent: itemExtent,
             ),
             onIndexChanged: (index) {
+              // ✅ NOUVEAU : Détecter scroll pour lazy loading
+              _checkLoadMore(index);
               // Optionnel : tracking analytics
             },
             itemBuilder: (context, index, realIndex) {
@@ -364,9 +391,11 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
       !currentDistances.containsKey(experience.id)).toList();
 
       if (missingExperiences.isEmpty) {
-        // Toutes les distances sont déjà en cache
+        // Toutes les distances sont déjà en cache - SORTIR
         return;
       }
+
+      print('🔄 DISTANCE CACHE: ${missingExperiences.length} nouvelles distances à calculer');
 
       final distanceNotifier = ref.read(activityDistancesProvider.notifier);
 
@@ -380,9 +409,30 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
       // Utiliser la méthode batch du nouveau système
       await distanceNotifier.cacheActivitiesDistances(experiencesData);
 
-      print('✅ EXPERIENCE MIGRATION: ${missingExperiences.length} distances calculées');
+      print('✅ DISTANCE CACHE: ${missingExperiences.length} distances calculées');
     } catch (e) {
-      print('❌ EXPERIENCE MIGRATION: Erreur $e');
+      print('❌ DISTANCE CACHE: Erreur $e');
     }
   }
+
+  @override
+  void didUpdateWidget(covariant GenericExperienceCarousel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // ✅ RESET _lastTriggerIndex quand les items augmentent (loadMore réussi)
+    final oldItemCount = oldWidget.experiences?.length ?? 0;
+    final newItemCount = widget.experiences?.length ?? 0;
+
+    if (newItemCount > oldItemCount) {
+      print('🔄 T2 RESET: Items passés de $oldItemCount → $newItemCount, reset trigger index');
+      _lastTriggerIndex = -1; // ✅ Reset pour permettre nouveaux triggers
+    }
+
+    // ✅ Détecter le passage false → true pour isPartial
+    if (!oldWidget.isPartial && widget.isPartial && widget.onRequestCompletion != null) {
+      print('🔄 TIMER T1: Détection false→true pour ${widget.title}');
+      _scheduleCompletion();
+    }
+  }
+
 }
