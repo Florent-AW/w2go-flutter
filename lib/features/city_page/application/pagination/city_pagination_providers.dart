@@ -1,3 +1,5 @@
+//lib/features/city_page/application/pagination/city_pagination_providers.dart
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/application/pagination_controller.dart';
 import '../../../../core/domain/models/shared/experience_item.dart';
