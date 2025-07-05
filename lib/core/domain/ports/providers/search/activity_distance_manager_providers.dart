@@ -82,7 +82,6 @@ class ActivityDistancesNotifier extends StateNotifier<Map<String, double>> {
       state = {...state, ...distances};
 
       if (distances.isNotEmpty) {
-        print('📊 ${distances.length} distances calculées (système unifié)');
       }
     } catch (e) {
       print('❌ Erreur cache distances batch: $e');

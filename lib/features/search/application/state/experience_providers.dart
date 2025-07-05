@@ -190,10 +190,8 @@ final subcategorySectionExperiencesProvider = FutureProvider.family<Map<String, 
         // Limiter à 20 expériences par section
         result[sectionKey] = experiences.take(20).toList();
 
-        print('✅ Section $sectionKey: ${activities.length} activités + ${events.length} événements = ${result[sectionKey]!.length} expériences');
       }
 
-      print('📊 FUSION: ${result.length} sections avec expériences mixtes');
       return result;
     } catch (e) {
       print('❌ Erreur lors du chargement des expériences mixtes par sous-catégorie: $e');

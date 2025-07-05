@@ -44,11 +44,13 @@ class _LoadingRouteState extends ConsumerState<LoadingRoute> {
       if (next.state == PreloadState.ready) {
         // Precache les images avec le context local
         if (next.criticalImageUrls.isNotEmpty) {
+          print('🖼️ PRÉCACHE: Début pour ${next.criticalImageUrls.length} images'); // ✅ DEBUG
           await CachingImageProvider.precacheMultiple(
             next.criticalImageUrls,
             context,
             maxConcurrent: 3,
           );
+          print('✅ PRÉCACHE: Terminé pour ${next.criticalImageUrls.length} images'); // ✅ DEBUG
         }
         _navigateToTarget();
       }
@@ -76,12 +78,15 @@ class _LoadingRouteState extends ConsumerState<LoadingRoute> {
   }
 
   void _navigateToTarget() {
-    // ✅ CORRECTION: Utiliser Navigator.pushReplacementNamed
+    // ✅ CORRECTION: Navigation selon le type détecté
     switch (widget.targetPageType) {
       case 'city':
         Navigator.of(context).pushReplacementNamed('/city/${widget.targetCity.id}');
         break;
-    // TODO: Ajouter categories plus tard
+      case 'category':
+      // ✅ NOUVEAU: Navigation vers CategoryPage (première catégorie)
+        Navigator.of(context).pushReplacementNamed('/category');
+        break;
       default:
         Navigator.of(context).pushReplacementNamed('/city/${widget.targetCity.id}');
     }

@@ -2,8 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/domain/models/shared/city_model.dart';
 import '../../../core/domain/models/shared/category_model.dart';
 import '../../../core/domain/models/shared/experience_item.dart';
+import '../../search/application/state/section_discovery_providers.dart';
 import '../../city_page/application/providers/city_experiences_controller.dart';
 import '../../categories/application/state/categories_provider.dart';
+import '../../categories/application/state/subcategories_provider.dart';
 
 enum PreloadState { idle, loading, ready }
 
@@ -65,11 +67,13 @@ class PreloadController extends StateNotifier<PreloadData> {
     state = state.copyWith(state: PreloadState.loading);
 
     try {
-      // Pour l'instant, on ne gère que CityPage
+      // Gérer selon le type de page cible
       if (targetPageType == 'city') {
         await _preloadCityPage(city);
+      } else if (targetPageType == 'category') {
+        await _preloadCategoryPage(city);  // ✅ NOUVEAU
       }
-      // TODO: Ajouter CategoryPage plus tard
+      // TODO: Ajouter d'autres types si nécessaire
 
       state = state.copyWith(state: PreloadState.ready);
       print('✅ PRELOAD: Terminé avec succès');
@@ -139,6 +143,46 @@ class PreloadController extends StateNotifier<PreloadData> {
     }
   }
 
+  /// Précharge les données d'une CategoryPage avec déduplication
+  Future<void> _preloadCategoryPage(City city) async {
+    try {
+      // 1. Récupérer la première catégorie
+      final allCategories = await ref.read(categoriesProvider.future);
+      if (allCategories.isEmpty) {
+        throw Exception('Aucune catégorie disponible');
+      }
+
+      final firstCategory = allCategories.first;
+      print('🔄 PRELOAD CATEGORY: Préchargement de ${firstCategory.name} pour ${city.cityName}');
+
+      final carouselsInfo = <CarouselLoadInfo>[];
+      final imageUrls = <String>[];
+      final loadedActivityIds = <String>{}; // ✅ NOUVEAU : Déduplication
+
+      // 2. Featured carousel (10 items) - EXISTANT
+      await _loadCarouselWithLimit(
+        city, firstCategory, 'a62c6046-8814-456f-91ba-b65aa7e73137',
+        10, carouselsInfo, imageUrls, isFirst: true,
+        loadedActivityIds: loadedActivityIds, // ✅ NOUVEAU
+      );
+
+      // 3. ✅ NOUVEAU : Première sous-catégorie (3 carrousels × 5 items)
+      await _preloadFirstSubcategory(city, firstCategory, carouselsInfo, imageUrls, loadedActivityIds);
+
+      // 4. Mettre à jour le state
+      state = state.copyWith(
+        criticalImageUrls: imageUrls,
+        carouselsInfo: carouselsInfo,
+      );
+
+      print('✅ PRELOAD CATEGORY: ${carouselsInfo.length} carrousels, ${imageUrls.length} images, ${loadedActivityIds.length} activities uniques');
+
+    } catch (e) {
+      print('❌ PRELOAD CATEGORY: Erreur: $e');
+      rethrow;
+    }
+  }
+
   /// Helper pour charger un carrousel avec limite spécifique
   Future<void> _loadCarouselWithLimit(
       City city,
@@ -147,7 +191,7 @@ class PreloadController extends StateNotifier<PreloadData> {
       int limit,
       List<CarouselLoadInfo> carouselsInfo,
       List<String> imageUrls,
-      {required bool isFirst}
+      {required bool isFirst, Set<String>? loadedActivityIds}
       ) async {
     try {
       // Utiliser les méthodes publiques du CityExperiencesController
@@ -180,6 +224,7 @@ class PreloadController extends StateNotifier<PreloadData> {
       for (final exp in experiences) {
         if (exp.mainImageUrl?.isNotEmpty == true) {
           imageUrls.add(exp.mainImageUrl!);
+          print('📸 PRELOAD IMG: ${exp.name} → ${exp.mainImageUrl}'); // ✅ DEBUG
         }
       }
 
@@ -206,6 +251,60 @@ class PreloadController extends StateNotifier<PreloadData> {
         isPartial: false,
         totalAvailable: 0,
       ));
+    }
+  }
+
+  /// Précharge la première sous-catégorie (3 carrousels × 5 items)
+  Future<void> _preloadFirstSubcategory(
+      City city,
+      Category category,
+      List<CarouselLoadInfo> carouselsInfo,
+      List<String> imageUrls,
+      Set<String> loadedActivityIds,
+      ) async {
+    try {
+      // 1. Récupérer les sous-catégories avec contenu
+      final subcategoriesWithContent = await ref.read(subcategoriesWithContentProvider((
+      categoryId: category.id,
+      city: city,
+      )).future);
+
+      if (subcategoriesWithContent.isEmpty) {
+        print('⚠️ PRELOAD SUBCATEGORY: Aucune sous-catégorie avec contenu');
+        return;
+      }
+
+      final firstSubcategory = subcategoriesWithContent.first;
+      print('🔄 PRELOAD SUBCATEGORY: Chargement de ${firstSubcategory.name}');
+
+      // 2. ✅ NOUVEAU : Récupérer les vraies sections pour cette catégorie
+      final subcategorySections = await ref.read(effectiveSubcategorySectionsProvider(category.id).future);
+
+      if (subcategorySections.isEmpty) {
+        print('⚠️ PRELOAD SUBCATEGORY: Aucune section trouvée pour ${category.name}');
+        return;
+      }
+
+      // 3. Charger les 3 premiers carrousels (ou moins si moins de sections)
+      final sectionsToLoad = subcategorySections.take(3).toList();
+
+      for (int i = 0; i < sectionsToLoad.length; i++) {
+        final section = sectionsToLoad[i];
+        print('🔄 PRELOAD SUBCATEGORY: Section ${section.title} (${section.id})');
+
+        await _loadCarouselWithLimit(
+          city, category, section.id,
+          5, carouselsInfo, imageUrls,
+          isFirst: false,
+          loadedActivityIds: loadedActivityIds,
+        );
+      }
+
+      print('✅ PRELOAD SUBCATEGORY: ${firstSubcategory.name} terminé (${sectionsToLoad.length} sections)');
+
+    } catch (e) {
+      print('❌ PRELOAD SUBCATEGORY: Erreur: $e');
+      // Ne pas faire rethrow pour ne pas bloquer le preload
     }
   }
 
