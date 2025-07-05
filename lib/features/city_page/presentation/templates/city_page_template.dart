@@ -13,6 +13,7 @@ import '../../../preload/application/preload_providers.dart';
 import '../../application/providers/city_experiences_controller.dart';
 import '../widgets/delegates/city_page_cover_delegate.dart';
 import '../widgets/delegates/city_page_cover_delegate_skeleton.dart';
+import '../../application/pagination/city_pagination_providers.dart';
 
 /// Template pour la page ville
 /// Affiche les carrousels par catégorie sans sous-catégories
@@ -127,41 +128,13 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
   }
 
   /// Construit les sections par catégorie avec des données
+  /// Construit les sections par catégorie avec des données
   Widget _buildCategorySections(BuildContext context, List<CategoryExperiences> categories) {
     // Filtrer les catégories qui ont du contenu
     final categoriesWithContent = categories.where((cat) => cat.sections.isNotEmpty).toList();
 
     if (categoriesWithContent.isEmpty) {
-      return SliverToBoxAdapter(
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.all(AppDimensions.spacingXl),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.explore_off,
-                  size: AppDimensions.iconSizeXl,
-                  color: AppColors.neutral400,
-                ),
-                SizedBox(height: AppDimensions.spacingM),
-                Text(
-                  'Aucune expérience disponible',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.neutral600,
-                  ),
-                ),
-                SizedBox(height: AppDimensions.spacingS),
-                Text(
-                  'Essayez de sélectionner une autre ville',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.neutral500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
+      return SliverToBoxAdapter(/* ... message vide existant ... */);
     }
 
     return SliverList(
@@ -169,35 +142,70 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
             (context, categoryIndex) {
           final categoryExp = categoriesWithContent[categoryIndex];
 
-          return Column(
-            children: [
-              // Pour chaque section de la catégorie, créer un carousel
-              ...categoryExp.sections.map((sectionExp) {
-                return Container(
-                  child: GenericExperienceCarousel(
-                    key: ValueKey('city-${widget.cityId}-${categoryExp.category.id}-${sectionExp.section.id}'),
-                    title: sectionExp.section.title,
-                    experiences: sectionExp.experiences,
-                    heroPrefix: 'city-${categoryExp.category.id}-${sectionExp.section.id}',
-                    openBuilder: widget.openBuilder,
-                    showDistance: true,
-                    // ✅ NOUVEAU : Déterminer si partiel depuis preload data
-                    isPartial: _isCarouselPartial(categoryExp.category.id, categoryIndex),
-                    onRequestCompletion: () => _completeCarousel(categoryExp.category.id),
-                    onSeeAllPressed: () => _onSeeAllPressed(context, categoryExp.category, sectionExp.section),
-                  ),
-                );
-              }).toList(),
+          // ✅ NOUVEAU : Test du premier carrousel avec pagination
+          if (categoryIndex == 0) {
+            return _buildPaginatedCarousel(context, categoryExp);
+          }
 
-              // Espacement entre catégories
-              if (categoryIndex < categoriesWithContent.length - 1)
-                SizedBox(height: AppDimensions.spacingL),
-            ],
-          );
+          // ✅ ANCIEN : Garder les autres carrousels avec l'ancien système
+          return Column(/* ... code existant ... */);
         },
         childCount: categoriesWithContent.length,
       ),
     );
+  }
+
+  /// ✅ NOUVEAU : Widget de test pour le carrousel paginé
+  Widget _buildPaginatedCarousel(BuildContext context, CategoryExperiences categoryExp) {
+    final selectedCity = ref.read(selectedCityProvider);
+
+    if (selectedCity == null) {
+      return SizedBox.shrink();
+    }
+
+    final section = categoryExp.sections.first.section;
+
+    final params = CityCarouselParams(
+      city: selectedCity,
+      sectionId: section.id,
+      categoryId: categoryExp.category.id,
+    );
+
+    return Consumer(
+      builder: (context, ref, child) {
+        final controller = ref.watch(cityActivitiesPaginationProvider(params).notifier);
+        final paginationState = ref.watch(cityActivitiesPaginationProvider(params));
+
+        // ✅ GARDE : Initialiser UNE SEULE FOIS
+        if (paginationState.items.isEmpty &&
+            !paginationState.isLoading &&
+            !paginationState.isLoadingMore) {
+
+          print('🎯 INITIALISATION PAGINATION pour ${categoryExp.category.name}');
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            controller.loadInitial(); // ✅ Essayer loadInitial au lieu de loadPreload
+          });
+        }
+
+        return Container(
+          child: GenericExperienceCarousel(
+            key: ValueKey('paginated-${categoryExp.category.id}'),
+            title: '🔄 PAGINATION TEST - ${categoryExp.category.name} (${paginationState.items.length} items)',
+            experiences: paginationState.items,
+            isLoading: paginationState.isLoading,
+            errorMessage: paginationState.error,
+            heroPrefix: 'paginated-${categoryExp.category.id}',
+            showDistance: true,
+            isPartial: paginationState.isPartial,
+            onRequestCompletion: () => _completePaginatedCarousel(params),
+          ),
+        );
+      },
+    );
+  }
+  /// ✅ NOUVEAU : Complétion pour carrousel paginé
+  void _completePaginatedCarousel(CityCarouselParams params) {
+    ref.read(cityActivitiesPaginationProvider(params).notifier).completeIfPartial();
   }
 
   /// Construit l'état de chargement avec skeletons

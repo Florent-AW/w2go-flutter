@@ -34,19 +34,18 @@ class CityCarouselParams {
 
 /// Provider pour un controller de pagination city activities
 final cityActivitiesPaginationProvider =
-    StateNotifierProvider.family
-PaginationController<ExperienceItem>,   // 1. notifier
-PaginationState<ExperienceItem>,        // 2. state
-CityCarouselParams                      // 3. param
->(
-(ref, params) {
-final dataProvider = CityActivitiesDataProvider(
-ref: ref,
-city: params.city,
-sectionId: params.sectionId,
-categoryId: params.categoryId,
-);
+StateNotifierProvider.family<
+    PaginationController<ExperienceItem>,
+    PaginationState<ExperienceItem>,
+    CityCarouselParams>(
+      (ref, params) {
+    final dataProvider = CityActivitiesDataProvider(
+      ref: ref,
+      city: params.city,
+      sectionId: params.sectionId,
+      categoryId: params.categoryId,
+    );
 
-return PaginationController<ExperienceItem>(dataProvider);
-},
+    return PaginationController<ExperienceItem>(dataProvider);
+      },
 );
