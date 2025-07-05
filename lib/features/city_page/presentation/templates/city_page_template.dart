@@ -423,14 +423,24 @@ class _CityPaginatedCarouselState extends ConsumerState<_CityPaginatedCarousel> 
     );
   }
 
+  /// ✅ CORRECTION : Déclenche le lazy loading T2 - AVEC GARDE ANTI-DUPLICATION
   void _loadMorePaginatedCarousel(CityCarouselParams params) {
     final controller = ref.read(cityActivitiesPaginationProvider(params).notifier);
     final currentState = ref.read(cityActivitiesPaginationProvider(params));
 
-    if (currentState.isLoadingMore || !currentState.hasMore) {
+    // ✅ CORRECTION 2 : Garde anti-duplication - Ne pas charger si preload pas fini
+    if (currentState.isLoading || currentState.currentOffset == 0) {
+      print('⚠️ T2 SKIP: Preload en cours (isLoading=${currentState.isLoading}, offset=${currentState.currentOffset})');
       return;
     }
 
-    controller.loadMore();
+    if (!currentState.isLoadingMore && currentState.hasMore) {
+      print('🚀 T2 LAZY LOADING: Chargement de la page suivante (offset=${currentState.currentOffset})');
+      controller.loadMore();
+    } else {
+      print('⚠️ T2 SKIP: isLoadingMore=${currentState.isLoadingMore}, hasMore=${currentState.hasMore}');
+    }
   }
+
+
 }

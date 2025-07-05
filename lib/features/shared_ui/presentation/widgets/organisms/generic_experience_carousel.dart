@@ -93,19 +93,23 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
     });
   }
 
-  /// ✅ NOUVEAU : Détecte si on doit charger plus d'items
+  /// Détecte si on doit charger plus d'items - SEUIL ADAPTATIF
   void _checkLoadMore(int currentIndex) {
+    if (widget.onLoadMore == null) return;
+
+    final totalItems = widget.experiences?.length ?? 0;
+    if (totalItems == 0) return;
+
+    // ✅ CORRECTION 1 : Seuil adaptatif au lieu de fixe
+    final triggerPosition = (totalItems / 2).floor(); // Moitié du chunk courant
+
     // Éviter triggers multiples au même index
     if (currentIndex <= _lastTriggerIndex) return;
 
-    final totalItems = widget.experiences?.length ?? 0;
-
-    // Trigger au 5ème item depuis la fin (ou position configurable)
-    const triggerPosition = 5;
     final shouldTrigger = currentIndex >= (totalItems - triggerPosition);
 
-    if (shouldTrigger && widget.onLoadMore != null) {
-      print('🔄 T2 LAZY LOADING: Trigger à l\'index $currentIndex/$totalItems');
+    if (shouldTrigger) {
+      print('🔄 T2 LAZY LOADING: Trigger à l\'index $currentIndex/$totalItems (seuil adaptatif: $triggerPosition)');
       _lastTriggerIndex = currentIndex;
       widget.onLoadMore!();
     }
