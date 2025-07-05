@@ -1,6 +1,7 @@
 // lib/features/shared_ui/presentation/widgets/organisms/generic_experience_carousel.dart
 
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 import 'package:infinite_carousel/infinite_carousel.dart';
@@ -20,38 +21,22 @@ import '../molecules/featured_experience_card.dart';
 
 /// Carousel générique pour afficher différentes listes d'expériences (activités + événements)
 /// ✅ ÉVOLUTION vers ExperienceItem pour unifier Activities et Events
-class GenericExperienceCarousel extends ConsumerWidget {
-  /// Titre du carousel
+class GenericExperienceCarousel extends ConsumerStatefulWidget {
+  /// [tous les paramètres existants restent identiques]
   final String title;
-
-  /// Sous-titre optionnel
   final String? subtitle;
-
-  /// Liste des expériences à afficher
   final List<ExperienceItem>? experiences;
-
-  /// Indique si les données sont en cours de chargement
   final bool isLoading;
-
-  /// Fonction appelée en cas d'erreur
   final String? errorMessage;
-
-  /// Callback pour l'action "Voir tout"
   final VoidCallback? onSeeAllPressed;
-
-  /// Hauteur du carousel
   final double height;
-
-  /// Nombre d'éléments en chargement
   final int loadingItemCount;
-
-  /// Affichage de la distance optionnel
   final bool showDistance;
-
-  /// Fonction personnalisée pour ouvrir l'expérience (optionnelle)
   final Widget Function(BuildContext, VoidCallback, ExperienceItem)? openBuilder;
   final InfiniteScrollController? scrollController;
   final String? heroPrefix;
+  final bool isPartial;
+  final VoidCallback? onRequestCompletion;
 
   const GenericExperienceCarousel({
     Key? key,
@@ -67,33 +52,68 @@ class GenericExperienceCarousel extends ConsumerWidget {
     this.showDistance = true,
     this.scrollController,
     this.heroPrefix,
+    this.isPartial = false,
+    this.onRequestCompletion,
   }) : super(key: key);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // ✅ CORRECTION : Vérifier au début si on doit afficher la section
+  ConsumerState<GenericExperienceCarousel> createState() => _GenericExperienceCarouselState();
+}
 
+class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCarousel> {
+  Timer? _completionTimer;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // ✅ NOUVEAU : Déclencher complétion automatique si partiel
+    if (widget.isPartial && widget.onRequestCompletion != null) {
+      _scheduleCompletion();
+    }
+  }
+
+  @override
+  void dispose() {
+    _completionTimer?.cancel();
+    super.dispose();
+  }
+
+  /// ✅ NOUVEAU : Planifier la complétion automatique
+  void _scheduleCompletion() {
+    _completionTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (mounted && widget.onRequestCompletion != null) {
+        print('🔄 COMPLÉTION T1: Déclenchement pour ${widget.title}');
+        widget.onRequestCompletion!();
+      }
+    });
+  }
+
+
+
+  @override
+  Widget build(BuildContext context) {  // ✅ Enlever WidgetRef ref du build
     // 1️⃣ Toujours afficher si loading (avec skeleton)
-    if (isLoading) {
-      return _buildFullSection(context, ref);
+    if (widget.isLoading) {  // ✅ Ajouter widget.
+      return _buildFullSection(context);
     }
 
     // 2️⃣ Toujours afficher si erreur (avec message d'erreur)
-    if (errorMessage != null) {
-      return _buildFullSection(context, ref);
+    if (widget.errorMessage != null) {  // ✅ Ajouter widget.
+      return _buildFullSection(context);
     }
 
     // 3️⃣ NOUVEAU : Masquer complètement si vide (ni titre ni espace)
-    if (experiences == null || experiences!.isEmpty) {
-      return const SizedBox.shrink(); // ✅ RIEN du tout si vide
+    if (widget.experiences == null || widget.experiences!.isEmpty) {  // ✅ Ajouter widget.
+      return const SizedBox.shrink();
     }
 
     // 4️⃣ Afficher la section complète si on a des données
-    return _buildFullSection(context, ref);
+    return _buildFullSection(context);
   }
 
   /// ✅ NOUVEAU : Méthode pour construire la section complète (titre + contenu)
-  Widget _buildFullSection(BuildContext context, WidgetRef ref) {
+  Widget _buildFullSection(BuildContext context) {
     final allDistances = ref.watch(activityDistancesProvider);
     final selectedCity = ref.watch(selectedCityProvider);
 
@@ -116,14 +136,14 @@ class GenericExperienceCarousel extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
+                      widget.title,  // ✅ Ajouter widget.
                       style: context.title,
                     ),
                   ],
                 ),
-                if (onSeeAllPressed != null)
+                if (widget.onSeeAllPressed != null)  // ✅ Ajouter widget.
                   TextButton(
-                    onPressed: onSeeAllPressed,
+                    onPressed: widget.onSeeAllPressed,  // ✅ Ajouter widget.
                     child: Text(
                       'Voir tout',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -152,18 +172,19 @@ class GenericExperienceCarousel extends ConsumerWidget {
       Map<String, double> allDistances,
       City? selectedCity,
       ) {
-    final baseKey = (key is ValueKey) ? (key as ValueKey).value : key;
+    final baseKey = (widget.key is ValueKey) ? (widget.key as ValueKey).value : widget.key;
 
     // ✅ Afficher le chargement
-    if (isLoading) {
+    if (widget.isLoading) {
       return _buildLoadingState(context);
     }
 
+
     // ✅ Afficher le message d'erreur
-    if (errorMessage != null) {
+    if (widget.errorMessage != null) {
       return Center(
         child: Text(
-          errorMessage!,
+          widget.errorMessage!,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: AppColors.error,
           ),
@@ -176,7 +197,7 @@ class GenericExperienceCarousel extends ConsumerWidget {
 
     // ✅ Pré-calculer les distances
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _precacheDistancesIfNeeded(experiences!, ref, allDistances);
+      _precacheDistancesIfNeeded(widget.experiences!, ref, allDistances);
     });
 
     // ✅ Carousel avec données
@@ -188,8 +209,8 @@ class GenericExperienceCarousel extends ConsumerWidget {
         return RepaintBoundary(
           child: InfiniteCarousel.builder(
             key: baseKey != null ? ValueKey('${baseKey}_infinite') : null,
-            controller: scrollController,
-            itemCount: experiences!.length,
+            controller: widget.scrollController,
+            itemCount: widget.experiences!.length,
             itemExtent: itemExtent,
             anchor: 0.0,
             velocityFactor: 0.8,
@@ -203,13 +224,13 @@ class GenericExperienceCarousel extends ConsumerWidget {
               // Optionnel : tracking analytics
             },
             itemBuilder: (context, index, realIndex) {
-              final experience = experiences![index];
+              final experience = widget.experiences![index];
               final distance = allDistances[experience.id] ?? experience.distance ?? 0.0;
 
               // ✅ GÉNÉRATION heroTag STABLE et UNIQUE
-              final heroTag = heroPrefix != null
-                  ? 'activity-hero-${experience.id}-$heroPrefix'
-                  : 'activity-hero-${experience.id}-${title.toLowerCase().replaceAll(' ', '-')}';
+              final heroTag = widget.heroPrefix != null
+                  ? 'activity-hero-${experience.id}-${widget.heroPrefix}'
+                  : 'activity-hero-${experience.id}-${widget.title.toLowerCase().replaceAll(' ', '-')}';
 
               return Padding(
                 padding: EdgeInsets.only(
@@ -222,15 +243,15 @@ class GenericExperienceCarousel extends ConsumerWidget {
                   width: cardWidth,
                   experience: experience,
                   overrideDistance: distance,
-                  showDistance: showDistance,
+                  showDistance: widget.showDistance,
                   isFavorite: false,
                   showSubcategory: true,
                   onTap: () async {
                     print('🎯 CAROUSEL TAP: heroTag = "$heroTag" pour ${experience.name}');
 
                     // ✅ NOUVEAU : Ramener la carte au centre avant navigation
-                    if (scrollController != null) {
-                      await scrollController!.animateToItem(
+                    if (widget.scrollController != null) {
+                      await widget.scrollController!.animateToItem(
                         index,
                         duration: const Duration(milliseconds: 120),
                         curve: Curves.easeOut,
@@ -266,7 +287,7 @@ class GenericExperienceCarousel extends ConsumerWidget {
   }
 
   Widget _buildLoadingState(BuildContext context) {
-    final baseKey = (key is ValueKey) ? (key as ValueKey).value : key;
+    final baseKey = (widget.key is ValueKey) ? (widget.key as ValueKey).value : widget.key;
 
     return AppDimensions.buildResponsiveCarousel(
       builder: (context, constraints) {
@@ -277,8 +298,8 @@ class GenericExperienceCarousel extends ConsumerWidget {
           enabled: true,
           child: InfiniteCarousel.builder(
             key: baseKey != null ? ValueKey('${baseKey}_loading') : null,
-            controller: scrollController,
-            itemCount: loadingItemCount,
+            controller: widget.scrollController,
+            itemCount: widget.loadingItemCount,
             itemExtent: itemExtent,
             anchor: 0.0,
             velocityFactor: 0.8,
@@ -320,7 +341,7 @@ class GenericExperienceCarousel extends ConsumerWidget {
                       mainImageUrl: 'https://picsum.photos/400/240',
                     ),
                   ),
-                  showDistance: showDistance,
+                  showDistance: widget.showDistance,
                   isFavorite: false,
                   showSubcategory: true,
                 ),

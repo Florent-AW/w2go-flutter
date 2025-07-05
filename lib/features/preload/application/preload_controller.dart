@@ -3,7 +3,6 @@ import '../../../core/domain/models/shared/city_model.dart';
 import '../../../core/domain/models/shared/category_model.dart';
 import '../../../core/domain/models/shared/experience_item.dart';
 import '../../city_page/application/providers/city_experiences_controller.dart';
-import '../../city_page/application/providers/city_experiences_controller.dart';
 import '../../categories/application/state/categories_provider.dart';
 
 enum PreloadState { idle, loading, ready }

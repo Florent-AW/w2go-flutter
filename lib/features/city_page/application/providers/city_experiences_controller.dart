@@ -181,20 +181,27 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
       // ✅ NOUVEAU : Récupérer les vraies sections
       final citySections = await _getCitySections();
 
-      // 3. Charger en parallèle avec les vraies sections
+      // ✅ NOUVEAU : Définir la section générale comme fallback
+      final generalSection = citySections.where((s) => s.categoryId == null).firstOrNull;
+
+      // ✅ DEBUG : Voir les matches par catégorie
+      final eventSection = citySections.where((s) => s.categoryId == eventCategory.id).firstOrNull;
+
+
+      // 3. Charger en parallèle avec les vraies sections ET fallback
       final results = await Future.wait([
         // ✅ ÉVÉNEMENTS avec vraie section
         _loadEventsCategoryExperiences(
             eventCategory,
             selectedCity,
-            citySections.where((s) => s.categoryId == eventCategory.id).firstOrNull
+            eventSection
         ),
-        // ✅ ACTIVITÉS avec vraies sections
+        // ✅ ACTIVITÉS avec sections spécifiques OU générale
         ...activityCategories.map((category) =>
             _loadActivityCategoryExperiences(
                 category,
                 selectedCity,
-                citySections.where((s) => s.categoryId == category.id).firstOrNull
+                citySections.where((s) => s.categoryId == category.id).firstOrNull ?? generalSection
             )
         ),
       ]);
@@ -258,16 +265,35 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
       // Debug pour voir quelle catégorie on traite
       print('🔍 DEBUG: _loadActivityCategoryExperiences pour ${category.name} (id: "${category.id}")');
 
-      // ✅ Utiliser customLimit en priorité, puis section, puis défaut
+      // ✅ DEBUG : Voir ce qu'il y a dans filterConfig
+      print('🔍 DEBUG filterConfig pour ${category.name}: ${section?.filterConfig}');
+
       final activitiesSectionId = section?.id ?? '5aa09feb-397a-4ad1-8142-7dcf0b2edd0f';
-      final limit = customLimit ?? section?.filterConfig?['limit'] as int? ?? 20;
+
+      // ✅ PARSING ROBUSTE de la limite
+      int? limit;
+      if (customLimit != null) {
+        limit = customLimit; // Preload
+        print('🔍 DEBUG utilisation customLimit: $limit');
+      } else if (section?.filterConfig != null) {
+        final filterLimit = section!.filterConfig!['limit'];
+        if (filterLimit is int) {
+          limit = filterLimit;
+        } else if (filterLimit is String) {
+          limit = int.tryParse(filterLimit);
+        }
+        print('🔍 DEBUG limite parsée: $limit (original: $filterLimit, type: ${filterLimit.runtimeType})');
+      } else {
+        limit = 20; // Vraiment aucune config
+        print('🔍 DEBUG aucune section, limite par défaut: $limit');
+      }
 
       final experiences = await _retry(() async {
         return await ref.read(cityActivitiesBySectionProvider((
         sectionId: activitiesSectionId,
         categoryId: category.id,
         city: city,
-        limit: limit,
+        limit: limit ?? 20, // Fallback final
         )).future).timeout(const Duration(seconds: 10));
       });
 

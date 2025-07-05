@@ -9,6 +9,7 @@ import '../../../../../core/theme/components/organisms/app_header.dart';
 import '../../../../../core/domain/models/shared/experience_item.dart';
 import '../../../search/application/state/city_selection_state.dart';
 import '../../../shared_ui/presentation/widgets/organisms/generic_experience_carousel.dart';
+import '../../../preload/application/preload_providers.dart';
 import '../../application/providers/city_experiences_controller.dart';
 import '../widgets/delegates/city_page_cover_delegate.dart';
 import '../widgets/delegates/city_page_cover_delegate_skeleton.dart';
@@ -179,6 +180,9 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
                     heroPrefix: 'city-${categoryExp.category.id}-${sectionExp.section.id}',
                     openBuilder: widget.openBuilder,
                     showDistance: true,
+                    // ✅ NOUVEAU : Déterminer si partiel depuis preload data
+                    isPartial: _isCarouselPartial(categoryExp.category.id, categoryIndex),
+                    onRequestCompletion: () => _completeCarousel(categoryExp.category.id),
                     onSeeAllPressed: () => _onSeeAllPressed(context, categoryExp.category, sectionExp.section),
                   ),
                 );
@@ -304,4 +308,24 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
     // TODO: Navigation vers page de recherche avec ville pré-sélectionnée
     print('🔍 Recherche dans la ville');
   }
+
+  /// ✅ NOUVEAU : Détermine si un carrousel est partiel (chargé avec 5 items au lieu de 10+)
+  bool _isCarouselPartial(String categoryId, int categoryIndex) {
+    final preloadData = ref.read(preloadControllerProvider);
+
+    // Chercher dans les infos de preload
+    final carouselInfo = preloadData.carouselsInfo
+        .where((info) => info.categoryId == categoryId)
+        .firstOrNull;
+
+    return carouselInfo?.isPartial ?? false;
+  }
+
+  /// ✅ NOUVEAU : Déclenche la complétion d'un carrousel
+  void _completeCarousel(String categoryId) {
+    print('🔄 DEMANDE COMPLÉTION pour catégorie: $categoryId');
+    // TODO: Implémenter la logique de complétion
+  }
+
+
 }
