@@ -300,13 +300,14 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
       final experiencesList = experiences ?? <ExperienceItem>[];
 
       final sectionExp = SectionExperiences(
-        section: section ?? SectionMetadata(
-          id: activitiesSectionId,
-          title: category.name,
-          sectionType: 'city_featured',
-          priority: 1,
+        section: SectionMetadata(
+          id: section?.id ?? activitiesSectionId,
+          title: category.name, // ✅ TOUJOURS utiliser le nom de catégorie pour les activités
+          sectionType: section?.sectionType ?? 'city_featured',
+          priority: section?.priority ?? 1,
           categoryId: category.id,
-          displayOrder: 999,
+          displayOrder: section?.displayOrder ?? 999,
+          filterConfig: section?.filterConfig,
         ),
         experiences: experiencesList,
       );
@@ -352,13 +353,14 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
       final experiencesList = experiences ?? <ExperienceItem>[];
 
       final sectionExp = SectionExperiences(
-        section: section ?? SectionMetadata(
-          id: eventsSectionId,
-          title: eventCategory.name,
-          sectionType: 'city_featured',
-          priority: 2,
+        section: SectionMetadata(
+          id: section?.id ?? eventsSectionId,
+          title: section?.title ?? eventCategory.name, // ✅ Titre section si existe, sinon nom catégorie
+          sectionType: section?.sectionType ?? 'city_featured',
+          priority: section?.priority ?? 2,
           categoryId: eventCategory.id,
-          displayOrder: 999,
+          displayOrder: section?.displayOrder ?? 999,
+          filterConfig: section?.filterConfig,
         ),
         experiences: experiencesList,
       );
@@ -422,6 +424,54 @@ class CityExperiencesController extends FamilyAsyncNotifier<List<CategoryExperie
     );
   }
 
+  /// Complète un carrousel en rechargeant avec la limite Supabase complète
+  Future<void> completeCarouselForCategory(String categoryId, City city) async {
+    try {
+      print('🔄 COMPLETION: Début complétion pour catégorie $categoryId');
+
+      // Récupérer les catégories et sections
+      final allCategories = await ref.read(categoriesProvider.future);
+      final citySections = await _getCitySections();
+      const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
+
+      // Trouver la catégorie
+      final category = allCategories.where((cat) => cat.id == categoryId).firstOrNull;
+      if (category == null) {
+        print('❌ COMPLETION: Catégorie $categoryId non trouvée');
+        return;
+      }
+
+      // Trouver la section appropriée
+      final generalSection = citySections.where((s) => s.categoryId == null).firstOrNull;
+      final categorySection = citySections.where((s) => s.categoryId == categoryId).firstOrNull ?? generalSection;
+
+      // Recharger avec limite complète (pas de customLimit)
+      CategoryExperiences newCategoryExperiences;
+      if (categoryId == eventsCategoryId) {
+        newCategoryExperiences = await _loadEventsCategoryExperiences(category, city, categorySection);
+      } else {
+        newCategoryExperiences = await _loadActivityCategoryExperiences(category, city, categorySection);
+      }
+
+      // Mettre à jour l'état
+      final currentState = await future;
+      final updatedState = currentState.map((cat) {
+        if (cat.category.id == categoryId) {
+          return newCategoryExperiences;
+        }
+        return cat;
+      }).toList();
+
+      // Déclencher le rebuild
+      state = AsyncValue.data(updatedState);
+
+      print('✅ COMPLETION: Catégorie ${category.name} complétée');
+
+    } catch (e) {
+      print('❌ COMPLETION: Erreur $e');
+    }
+  }
+
 
 }
 
@@ -447,3 +497,4 @@ final hasCityContentProvider = Provider.family<bool, String?>((ref, cityId) {
 final cityExperiencesControllerInstanceProvider = Provider.family<CityExperiencesController, String?>((ref, cityId) {
   return ref.read(cityExperiencesControllerProvider(cityId).notifier);
 });
+

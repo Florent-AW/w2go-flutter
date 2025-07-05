@@ -324,7 +324,17 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
   /// ✅ NOUVEAU : Déclenche la complétion d'un carrousel
   void _completeCarousel(String categoryId) {
     print('🔄 DEMANDE COMPLÉTION pour catégorie: $categoryId');
-    // TODO: Implémenter la logique de complétion
+
+    // Récupérer la ville sélectionnée
+    final selectedCity = ref.read(selectedCityProvider);
+    if (selectedCity == null) {
+      print('❌ COMPLETION: Pas de ville sélectionnée');
+      return;
+    }
+
+    // Appeler le controller pour compléter le carrousel
+    ref.read(cityExperiencesControllerProvider(widget.cityId).notifier)
+        .completeCarouselForCategory(categoryId, selectedCity);
   }
 
 
