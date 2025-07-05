@@ -14,6 +14,8 @@ import '../../../../../features/search/application/state/experience_providers.da
 import '../../../../../features/search/application/state/section_discovery_providers.dart';
 import '../../../../../features/search/application/state/city_selection_state.dart';
 import '../../../../../features/shared_ui/presentation/widgets/organisms/generic_experience_carousel.dart';
+import '../../../../../features/preload/application/preload_providers.dart';
+import '../../../application/providers/category_experiences_controller.dart';
 import '../../../application/state/categories_provider.dart';
 import '../../../application/state/subcategories_provider.dart';
 
@@ -186,6 +188,9 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
               subtitle: "Pour ${selectedSubcategory.name}",
               experiences: experiences,
               isLoading: false,
+              // ✅ NOUVEAU : Déterminer si partiel et callback complétion
+              isPartial: _isCarouselPartial(currentCategoryId, section.id),
+              onRequestCompletion: () => _completeCarousel(currentCategoryId, section.id),
               openBuilder: widget.openBuilder != null
                   ? (context, action, experience) {
                 if (experience.isEvent) {
@@ -300,4 +305,43 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
       ),
     );
   }
+
+  /// Détermine si un carrousel est partiel (chargé avec 5 items au lieu de 10+)
+  bool _isCarouselPartial(String? categoryId, String sectionId) {
+    final preloadData = ref.read(preloadControllerProvider);
+
+    // Chercher dans les infos de preload
+    final carouselInfo = preloadData.carouselsInfo
+        .where((info) => info.categoryId == categoryId && info.sectionId == sectionId)
+        .firstOrNull;
+
+    return carouselInfo?.isPartial ?? false;
+  }
+
+  /// Déclenche la complétion d'un carrousel
+  void _completeCarousel(String? categoryId, String sectionId) {
+    print('🔄 DEMANDE COMPLÉTION SUBCATEGORY pour catégorie: $categoryId, section: $sectionId');
+
+    if (categoryId == null) {
+      print('❌ COMPLETION: categoryId null');
+      return;
+    }
+
+    // Récupérer la ville sélectionnée
+    final selectedCity = ref.read(selectedCityProvider);
+    if (selectedCity == null) {
+      print('❌ COMPLETION: Pas de ville sélectionnée');
+      return;
+    }
+
+    // Appeler le controller pour compléter le carrousel subcategory
+    ref.read(categoryExperiencesControllerProvider.notifier)
+        .completeCarouselForCategory(
+        categoryId,
+        sectionId,
+        selectedCity,
+        isFeatured: false
+    );
+  }
+
 }

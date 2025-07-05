@@ -148,6 +148,7 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
                         title: section.title,
                         heroPrefix: 'featured-${widget.currentCategory.id}-${section.id}',
                         experiences: experiences,
+                        isPartial: false,
                         openBuilder: _buildOpenBuilder(),
                       ),
                     );
@@ -162,6 +163,7 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
                       heroPrefix: 'featured-${widget.currentCategory.id}-${section.id}',
                       experiences: null,
                       isLoading: true,
+                      isPartial: false,
                     ),
                   ),
                   error: (error, stack) => const SizedBox.shrink(), // ✅ Masquer les erreurs
@@ -183,6 +185,7 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
           heroPrefix: 'featured-${widget.currentCategory.id}',
           experiences: null,
           isLoading: true,
+          isPartial: false,
         ),
       ),
       error: (error, stack) => const SizedBox.shrink(), // ✅ Masquer les erreurs

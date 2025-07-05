@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/domain/models/shared/city_model.dart';
 import '../../../../core/common/utils/caching_image_provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../categories/application/state/categories_provider.dart';
 import '../application/preload_providers.dart';
 import '../application/preload_controller.dart';
 
@@ -78,17 +78,26 @@ class _LoadingRouteState extends ConsumerState<LoadingRoute> {
   }
 
   void _navigateToTarget() {
-    // ✅ CORRECTION: Navigation selon le type détecté
     switch (widget.targetPageType) {
       case 'city':
         Navigator.of(context).pushReplacementNamed('/city/${widget.targetCity.id}');
         break;
       case 'category':
-      // ✅ NOUVEAU: Navigation vers CategoryPage (première catégorie)
-        Navigator.of(context).pushReplacementNamed('/category');
+      // ✅ CLEAN : LoadingRoute détermine la première catégorie
+        final categories = ref.read(categoriesProvider).value ?? [];
+        final firstCategory = categories.isNotEmpty ? categories.first : null;
+
+        if (firstCategory != null) {
+          Navigator.of(context).pushReplacementNamed('/category/${firstCategory.id}');
+        } else {
+          // Fallback vers city si aucune catégorie
+          print('⚠️ NAVIGATION: Aucune catégorie disponible, fallback vers city');
+          Navigator.of(context).pushReplacementNamed('/city/${widget.targetCity.id}');
+        }
         break;
       default:
         Navigator.of(context).pushReplacementNamed('/city/${widget.targetCity.id}');
     }
   }
+
 }
