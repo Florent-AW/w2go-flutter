@@ -1,14 +1,13 @@
 // lib/features/city_page/application/providers/city_experiences_controller.dart
 
 import 'dart:async';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/domain/models/shared/city_model.dart';
 import '../../../../core/domain/models/shared/category_model.dart';
 import '../../../../core/domain/models/shared/experience_item.dart';
 import '../../../../core/domain/models/search/config/section_metadata.dart';
 import '../../../categories/application/state/categories_provider.dart';
-import '../../../search/application/state/experience_providers.dart';
 import '../../../search/application/state/city_selection_state.dart';
 import '../../../search/application/state/activity_providers.dart';
 import '../../../search/application/state/event_providers.dart';

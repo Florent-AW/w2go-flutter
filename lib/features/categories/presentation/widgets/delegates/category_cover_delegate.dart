@@ -33,7 +33,6 @@ class CategoryCoverDelegate extends SliverPersistentHeaderDelegate {
     this.contextRef,
   }) : _maxExtent = screenHeight * CategoryUIConstants.coverHeight {
     // Debug : log la hauteur maximale attendue
-    print('>>> CategoryCoverDelegate: _maxExtent = $_maxExtent (screenHeight = $screenHeight)');
   }
 
 

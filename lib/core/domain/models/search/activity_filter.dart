@@ -17,6 +17,7 @@ class ActivityFilter {
   final String orderDirection;
   final int limit;
   final String? sectionId; // ID de la section pour récupérer la config fusionnée
+  final int offset;
 
   const ActivityFilter({
     this.categoryId,
@@ -30,6 +31,7 @@ class ActivityFilter {
     this.orderBy = 'rating_avg',
     this.orderDirection = 'DESC',
     this.limit = 20,
+    this.offset = 0,
     this.sectionId,
   });
 
@@ -40,6 +42,7 @@ class ActivityFilter {
     String orderBy = 'rating_avg',
     String orderDirection = 'DESC',
     int limit = 10,
+    int offset = 0,
     String? sectionId,
   }) {
     return ActivityFilter(
@@ -48,6 +51,7 @@ class ActivityFilter {
       orderBy: orderBy,
       orderDirection: orderDirection,
       limit: limit,
+      offset: offset,
       sectionId: sectionId,
     );
   }
@@ -64,6 +68,10 @@ class ActivityFilter {
       'p_latitude': latitude,
       'p_longitude': longitude,
       'p_limit': limit,
+      'p_offset': offset,
+
+
+
     };
 
     // Ajouter section_id s'il est défini
@@ -102,6 +110,7 @@ class ActivityFilter {
       orderDirection: orderDirection ?? this.orderDirection,
       limit: limit ?? this.limit,
       sectionId: sectionId ?? this.sectionId,
+      offset: offset ?? this.offset,
     );
   }
 }

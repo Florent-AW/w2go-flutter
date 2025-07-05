@@ -16,6 +16,7 @@ final class GetActivitiesUseCase {
     String? subcategoryId,
     String? categoryId,
     int limit = 20,
+    int offset = 0,
   }) async {
     try {
       // Crée un filtre incluant sectionId et subcategoryId
@@ -24,6 +25,7 @@ final class GetActivitiesUseCase {
         subcategoryId: subcategoryId,
         sectionId: sectionId,  // IMPORTANT: inclure le sectionId ici
         limit: limit,
+        offset: offset,
       );
 
       return _searchPort.getActivitiesWithFilter(

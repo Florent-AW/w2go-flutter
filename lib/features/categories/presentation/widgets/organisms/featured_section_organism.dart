@@ -12,6 +12,8 @@ import '../../../../shared_ui/presentation/widgets/organisms/generic_experience_
 import '../../../../search/application/state/experience_providers.dart';
 import '../../../../search/application/state/city_selection_state.dart';
 import '../../../../experience_detail/presentation/pages/experience_detail_page.dart';
+import '../../../../preload/application/preload_providers.dart';
+import '../../../application/providers/category_experiences_controller.dart';
 
 /// Organism pour afficher la section Featured d'une catégorie
 /// Remplace les méthodes _buildFeaturedSection, _buildMultipleFeaturedSections, etc.
@@ -35,6 +37,36 @@ class FeaturedSectionOrganism extends ConsumerStatefulWidget {
 class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganism> {
   // ✅ Stockage stable des contrôleurs par section
   final Map<String, InfiniteScrollController> _scrollControllers = {};
+
+  /// Détermine si un carrousel est partiel (chargé avec limite preload)
+  bool _isCarouselPartial(String categoryId, String sectionId) {
+    final preloadData = ref.read(preloadControllerProvider);
+
+    final carouselInfo = preloadData.carouselsInfo
+        .where((info) => info.categoryId == categoryId && info.sectionId == sectionId)
+        .firstOrNull;
+
+    return carouselInfo?.isPartial ?? false;
+  }
+
+  /// Déclenche la complétion d'un carrousel Featured
+  void _completeCarousel(String categoryId, String sectionId) {
+    print('🔄 DEMANDE COMPLÉTION FEATURED pour catégorie: $categoryId, section: $sectionId');
+
+    final selectedCity = ref.read(selectedCityProvider);
+    if (selectedCity == null) {
+      print('❌ COMPLETION: Pas de ville sélectionnée');
+      return;
+    }
+
+    ref.read(categoryExperiencesControllerProvider.notifier)
+        .completeCarouselForCategory(
+        categoryId,
+        sectionId,
+        selectedCity,
+        isFeatured: true
+    );
+  }
 
   // ✅ Tracker les changements pour reset les positions
   String? _lastCategoryId;
@@ -144,11 +176,12 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
                       padding: EdgeInsets.only(bottom: 4.0),
                       child: GenericExperienceCarousel(
                         key: ValueKey('featured_events_${widget.currentCategory.id}_${section.id}'),
-                        scrollController: _getControllerForSection('events_${widget.currentCategory.id}_${section.id}'), // ✅ AJOUT
+                        scrollController: _getControllerForSection('events_${widget.currentCategory.id}_${section.id}'),
                         title: section.title,
                         heroPrefix: 'featured-${widget.currentCategory.id}-${section.id}',
                         experiences: experiences,
-                        isPartial: false,
+                        isPartial: _isCarouselPartial(widget.currentCategory.id, section.id), // ✅ AJOUT
+                        onRequestCompletion: () => _completeCarousel(widget.currentCategory.id, section.id), // ✅ AJOUT
                         openBuilder: _buildOpenBuilder(),
                       ),
                     );
@@ -158,12 +191,13 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
                     height: AppDimensions.activityCardHeight + AppDimensions.space20,
                     child: GenericExperienceCarousel(
                       key: ValueKey('featured_events_loading_${widget.currentCategory.id}_${section.id}'),
-                      scrollController: _getControllerForSection('events_loading_${widget.currentCategory.id}_${section.id}'), // ✅ AJOUT
+                      scrollController: _getControllerForSection('events_loading_${widget.currentCategory.id}_${section.id}'),
                       title: section.title,
                       heroPrefix: 'featured-${widget.currentCategory.id}-${section.id}',
                       experiences: null,
                       isLoading: true,
-                      isPartial: false,
+                      isPartial: false, // ✅ AJOUT - pas partiel en loading
+                      onRequestCompletion: null, // ✅ AJOUT - pas de complétion en loading
                     ),
                   ),
                   error: (error, stack) => const SizedBox.shrink(), // ✅ Masquer les erreurs
@@ -180,12 +214,13 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
         margin: EdgeInsets.only(bottom: AppDimensions.spacingXs),
         child: GenericExperienceCarousel(
           key: ValueKey('featured_events_loading_${widget.currentCategory.id}'),
-          scrollController: _getControllerForSection('events_general_loading_${widget.currentCategory.id}'), // ✅ AJOUT
+          scrollController: _getControllerForSection('events_general_loading_${widget.currentCategory.id}'),
           title: 'Événements',
           heroPrefix: 'featured-${widget.currentCategory.id}',
           experiences: null,
           isLoading: true,
-          isPartial: false,
+          isPartial: false, // ✅ AJOUT - pas partiel en loading
+          onRequestCompletion: null, // ✅ AJOUT - pas de complétion en loading
         ),
       ),
       error: (error, stack) => const SizedBox.shrink(), // ✅ Masquer les erreurs
