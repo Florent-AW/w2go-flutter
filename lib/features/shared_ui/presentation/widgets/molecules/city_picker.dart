@@ -27,12 +27,17 @@ class CityPicker extends ConsumerWidget {
   /// Couleur du texte de la ville
   final Color? locationTextColor;
 
+  /// Forcer le type de page cible ("city" ou "category")
+  final String? targetPageType;
+
+
   const CityPicker({
     super.key,
     this.textStyle,
     this.iconColor = Colors.white,
     this.iconSize = 20,
     this.locationTextColor,
+    this.targetPageType,
   });
 
   void _showCityPicker(BuildContext context, WidgetRef ref) async {
@@ -50,7 +55,8 @@ class CityPicker extends ConsumerWidget {
     // Vérifier si une ville a été sélectionnée
     if (city != null && city is City) {
       // ✅ Détecter le type de page cible
-      final targetPageType = TargetPageService.determineTargetPageType(context);
+      final targetPageType =
+          this.targetPageType ?? TargetPageService.determineTargetPageType(context);
 
       print('🎯 CITY PICKER: Ville sélectionnée: ${city.cityName}, target: $targetPageType');
 

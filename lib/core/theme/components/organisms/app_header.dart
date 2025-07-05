@@ -13,6 +13,8 @@ class AppHeader extends StatelessWidget {
   final String searchText;
   final TextStyle? locationTextStyle;
   final Color? iconColor;
+  /// Forcer le type de page cible pour le CityPicker
+  final String? targetPageType;
   final EdgeInsets? padding;
   final double? height;
   final Color? locationTextColor;
@@ -27,6 +29,7 @@ class AppHeader extends StatelessWidget {
     this.padding,
     this.height,
     this.locationTextColor,
+    this.targetPageType,
   }) : super(key: key);
 
   @override
@@ -48,6 +51,7 @@ class AppHeader extends StatelessWidget {
             textStyle: locationTextStyle,
             iconColor: iconColor ?? AppColors.accent,
             locationTextColor: locationTextColor,
+            targetPageType: targetPageType,
           ),
 
           // Espace flexible

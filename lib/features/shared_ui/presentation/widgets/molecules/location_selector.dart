@@ -14,6 +14,9 @@ class LocationSelector extends ConsumerWidget {
   final Color? iconColor;
   final Color? locationTextColor;
 
+  /// Forcer le type de page cible pour le CityPicker
+  final String? targetPageType;
+
 
   const LocationSelector({
     Key? key,
@@ -21,6 +24,7 @@ class LocationSelector extends ConsumerWidget {
     this.textStyle,
     this.iconColor,
     this.locationTextColor,
+    this.targetPageType,
   }) : super(key: key);
 
   @override
@@ -36,6 +40,7 @@ class LocationSelector extends ConsumerWidget {
           textStyle: textStyle,
           iconColor: iconColor ?? Colors.white,
           locationTextColor: locationTextColor,
+          targetPageType: targetPageType,
         ),
       ],
     );

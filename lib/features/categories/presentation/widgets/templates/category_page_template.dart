@@ -251,6 +251,7 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
                 shadows: [],
               ),
               // ✅ Padding et height gérés dans AppHeader
+              targetPageType: 'category',
             ),
           ),
         ),

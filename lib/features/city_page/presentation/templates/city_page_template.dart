@@ -70,6 +70,7 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
                   ? Colors.white
                   : AppColors.primary)
                   : Colors.white,
+              targetPageType: 'city',
             ),
           ),
         ),
