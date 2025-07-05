@@ -1,3 +1,5 @@
+// lib/core/application/pagination_controller.dart
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import '../domain/pagination/paginated_data_provider.dart';
