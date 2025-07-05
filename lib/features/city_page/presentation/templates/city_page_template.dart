@@ -183,7 +183,7 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
 
           print('🎯 INITIALISATION PAGINATION pour ${categoryExp.category.name}');
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            controller.loadInitial(); // ✅ Essayer loadInitial au lieu de loadPreload
+            controller.loadPreload(); // ✅ Essayer loadInitial au lieu de loadPreload
           });
         }
 

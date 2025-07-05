@@ -30,7 +30,8 @@ class PaginationState<T> with _$PaginationState<T> {
 class PaginationController<T> extends StateNotifier<PaginationState<T>> {
   final PaginatedDataProvider<T> _provider;
 
-  PaginationController(this._provider) : super(PaginationState<T>());
+  PaginationController(this._provider)
+      : super(PaginationState<T>(items: <T>[]));
 
   /// Charge la première page (reset complet)
   Future<void> loadInitial() async {
@@ -137,6 +138,6 @@ class PaginationController<T> extends StateNotifier<PaginationState<T>> {
 
   /// Reset complet
   void reset() {
-    state = const PaginationState();
+    state = PaginationState<T>(items: <T>[]);
   }
 }
