@@ -101,9 +101,16 @@ class PaginationController<T> extends StateNotifier<PaginationState<T>> {
   Future<void> loadMore() async {
     if (state.isLoadingMore || !state.hasMore) return;
 
+    // Limite visuelle de 30 items pour le carrousel
+    if (state.items.length >= 30) {
+      state = state.copyWith(hasMore: false);
+      return;
+    }
+
     state = state.copyWith(isLoadingMore: true, error: null);
 
     try {
+      print('🚀 REAL LOAD MORE: offset=${state.currentOffset}');
       final result = await _provider.loadPage(
         offset: state.currentOffset,
         limit: _provider.defaultPageSize,
@@ -116,6 +123,8 @@ class PaginationController<T> extends StateNotifier<PaginationState<T>> {
         currentOffset: result.nextOffset,
         isPartial: false, // ✅ Plus partiel après loadMore
       );
+
+      print('🔄 T2 RESET: trigger index');
 
       print('✅ PAGINATION MORE: ${_provider.providerId} → +${result.items.length} items (total: ${state.items.length})');
 

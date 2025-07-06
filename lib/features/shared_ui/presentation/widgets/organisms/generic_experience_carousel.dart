@@ -10,6 +10,7 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_dimensions.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/theme/components/physics/threshold_40px_physics.dart';
+import '../../../../../core/theme/components/molecules/infinite_paging_carousel.dart';
 import '../../../../../core/domain/models/shared/experience_item.dart';
 import '../../../../../core/domain/models/shared/city_model.dart';
 import '../../../../../core/common/utils/navigation_utils.dart';
@@ -217,7 +218,6 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
       );
     }
 
-    // ✅ SUPPRIMÉ : La vérification isEmpty est maintenant dans build()
     // À ce stade, on est sûr d'avoir des expériences non vides
 
     // Pré-calculer les distances avec garde
@@ -230,88 +230,74 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
     }
 
     // ✅ Carousel avec données
+    // ✅ NOUVEAU : Utiliser InfinitePagingCarousel au lieu d'InfiniteCarousel
     return AppDimensions.buildResponsiveCarousel(
       builder: (context, constraints) {
         final cardWidth = AppDimensions.calculateCarouselCardWidth(constraints);
-        final itemExtent = cardWidth + AppDimensions.spacingS;
 
-        return RepaintBoundary(
-          child: InfiniteCarousel.builder(
-            key: baseKey != null ? ValueKey('${baseKey}_infinite') : null,
-            controller: widget.scrollController,
-            itemCount: widget.experiences!.length,
-            itemExtent: itemExtent,
-            anchor: 0.0,
-            velocityFactor: 0.8,
-            loop: false,
-            physics: Threshold40pxPhysics(
-              landingFactor: 1.7,
-              triggerPx: 40.0,
-              itemExtent: itemExtent,
-            ),
-            onIndexChanged: (index) {
-              // ✅ NOUVEAU : Détecter scroll pour lazy loading
-              _checkLoadMore(index);
-              // Optionnel : tracking analytics
-            },
-            itemBuilder: (context, index, realIndex) {
-              final experience = widget.experiences![index];
-              final distance = allDistances[experience.id] ?? experience.distance ?? 0.0;
+        return InfinitePagingCarousel<ExperienceItem>(
+          key: baseKey != null ? ValueKey('${baseKey}_infinite') : null,
+          items: widget.experiences!,
+          height: AppDimensions.activityCardHeight - 20,
+          scrollController: widget.scrollController,
+          // ✅ NOUVEAU : Props pour lazy loading
+          onLoadMore: widget.onLoadMore,
+          hasMore: true, // TODO: sera connecté au PaginationController
+          isLoading: false, // TODO: sera connecté au PaginationController
+          lookAhead: 10,
+          precacheAhead: 3, // ✅ NOUVEAU : 3 images d'avance
+          getImageUrl: (experience) => experience.mainImageUrl, // ✅ NOUVEAU : Extraire URL
+          itemBuilder: (context, experience, index) {
+            final distance = allDistances[experience.id] ?? experience.distance ?? 0.0;
 
-              // ✅ GÉNÉRATION heroTag STABLE et UNIQUE
-              final heroTag = widget.heroPrefix != null
-                  ? 'activity-hero-${experience.id}-${widget.heroPrefix}'
-                  : 'activity-hero-${experience.id}-${widget.title.toLowerCase().replaceAll(' ', '-')}';
+            // ✅ GÉNÉRATION heroTag STABLE et UNIQUE
+            final heroTag = widget.heroPrefix != null
+                ? 'activity-hero-${experience.id}-${widget.heroPrefix}'
+                : 'activity-hero-${experience.id}-${widget.title.toLowerCase().replaceAll(' ', '-')}';
 
-              return Padding(
-                padding: EdgeInsets.only(
-                  left: 0,
-                  right: AppDimensions.spacingS,
-                ),
-                child: FeaturedExperienceCard(
-                  key: ValueKey(heroTag),
-                  heroTag: heroTag,
-                  width: cardWidth,
-                  experience: experience,
-                  overrideDistance: distance,
-                  showDistance: widget.showDistance,
-                  isFavorite: false,
-                  showSubcategory: true,
-                  onTap: () async {
-                    print('🎯 CAROUSEL TAP: heroTag = "$heroTag" pour ${experience.name}');
+            return FeaturedExperienceCard(
+              key: ValueKey(heroTag),
+              heroTag: heroTag,
+              width: cardWidth,
+              experience: experience,
+              overrideDistance: distance,
+              showDistance: widget.showDistance,
+              isFavorite: false,
+              showSubcategory: true,
+              onTap: () async {
+                print('🎯 CAROUSEL TAP: heroTag = "$heroTag" pour ${experience.name}');
 
-                    // ✅ NOUVEAU : Ramener la carte au centre avant navigation
-                    if (widget.scrollController != null) {
-                      await widget.scrollController!.animateToItem(
-                        index,
-                        duration: const Duration(milliseconds: 120),
-                        curve: Curves.easeOut,
-                      );
-                    }
+                // ✅ NOUVEAU : Ramener la carte au centre avant navigation
+                if (widget.scrollController != null) {
+                  await widget.scrollController!.animateToItem(
+                    index,
+                    duration: const Duration(milliseconds: 120),
+                    curve: Curves.easeOut,
+                  );
+                }
 
-                    if (experience.isEvent) {
-                      print('📅 Navigation vers événement: ${experience.name}');
-                      if (experience.asEvent != null) {
-                        NavigationUtils.navigateToEventDetail(
-                          context,
-                          event: experience.asEvent!,
-                          heroTag: heroTag,
-                        );
-                      } else {
-                        print('❌ CAROUSEL TAP: experience.asEvent est null !');
-                      }
-                    } else {
-                      print('🏛️ Navigation avec NavigationUtils classique');
-                      NavigationUtils.navigateToActivityDetail(
-                        context,
-                        activity: experience.asActivity!,
-                        heroTag: heroTag,
-                      );
-                    }
-                  },
-                ),
-              );
-            },          ),
+                if (experience.isEvent) {
+                  print('📅 Navigation vers événement: ${experience.name}');
+                  if (experience.asEvent != null) {
+                    NavigationUtils.navigateToEventDetail(
+                      context,
+                      event: experience.asEvent!,
+                      heroTag: heroTag,
+                    );
+                  } else {
+                    print('❌ CAROUSEL TAP: experience.asEvent est null !');
+                  }
+                } else {
+                  print('🏛️ Navigation avec NavigationUtils classique');
+                  NavigationUtils.navigateToActivityDetail(
+                    context,
+                    activity: experience.asActivity!,
+                    heroTag: heroTag,
+                  );
+                }
+              },
+            );
+          },
         );
       },
     );

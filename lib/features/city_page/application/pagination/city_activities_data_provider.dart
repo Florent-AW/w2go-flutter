@@ -110,6 +110,7 @@ class CityActivitiesDataProvider extends ExperienceDataProvider {
         items = activities.map((activity) => ExperienceItem.activity(activity)).toList();
       }
 
+      // Utiliser l'indicateur du backend si disponible, sinon fallback
       final hasMore = items.length == limit;
       final nextOffset = offset + items.length;
 
