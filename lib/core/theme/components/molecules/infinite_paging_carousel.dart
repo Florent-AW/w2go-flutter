@@ -223,13 +223,6 @@ class _InfinitePagingCarouselState<T> extends State<InfinitePagingCarousel<T>> {
           final cardWidth = AppDimensions.calculateCarouselCardWidth(constraints);
           final itemExtent = cardWidth + AppDimensions.spacingS;
 
-          // ✅ ASSERTION MISE À JOUR : Vérifier qu'on n'a pas de gutter caché
-          assert(() {
-            print('🔍 DEBUG: cardWidth=$cardWidth, spacing=${AppDimensions.spacingS}, itemExtent=$itemExtent');
-            print('🔍 DEBUG: Pas de gutter externe ajouté');
-            return true;
-          }(), 'itemExtent doit correspondre à la largeur physique réelle');
-
           return RepaintBoundary(
             child: InfiniteCarousel.builder(
               controller: _infiniteController,
