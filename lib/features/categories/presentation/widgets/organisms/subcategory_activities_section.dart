@@ -19,6 +19,9 @@ import '../../../application/providers/category_experiences_controller.dart';
 import '../../../application/state/categories_provider.dart';
 import '../../../application/state/subcategories_provider.dart';
 
+/// Widget pour afficher les sections d'activités d'une sous-catégorie
+/// Utilise encore l'ancien système PreloadController + CategoryExperiencesController
+/// TODO: Migrer vers PaginationController comme CityPage
 class SubcategoryActivitiesSection extends ConsumerStatefulWidget {
   final Widget Function(BuildContext, VoidCallback, SearchableActivity)? openBuilder;
 
@@ -175,6 +178,20 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
             return SizedBox.shrink();
           }
 
+          // ✅ NOUVEAU : Détecter si partiel et implémenter timer T1
+          final isPartial = _isCarouselPartial(currentCategoryId, section.id);
+
+          // ✅ Timer T1 automatique si partiel
+          if (isPartial) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              Future.delayed(const Duration(milliseconds: 1500), () {
+                if (mounted) {
+                  _completeCarousel(currentCategoryId, section.id);
+                }
+              });
+            });
+          }
+
           return RepaintBoundary(
             child: GenericExperienceCarousel(
               key: ValueKey(
@@ -188,9 +205,7 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
               subtitle: "Pour ${selectedSubcategory.name}",
               experiences: experiences,
               isLoading: false,
-              // ✅ NOUVEAU : Déterminer si partiel et callback complétion
-              isPartial: _isCarouselPartial(currentCategoryId, section.id),
-              onRequestCompletion: () => _completeCarousel(currentCategoryId, section.id),
+              // ✅ SUPPRIMÉ : isPartial et onRequestCompletion (gérés par timer ci-dessus)
               openBuilder: widget.openBuilder != null
                   ? (context, action, experience) {
                 if (experience.isEvent) {
@@ -230,7 +245,7 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
             subtitle: 'Pour cette sous-catégorie',
             experiences: null,
             isLoading: true,
-            loadingItemCount: 3,
+            // ✅ SUPPRIMÉ : loadingItemCount (utilise constante interne)
           ),
         ),
 
@@ -243,7 +258,7 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
             subtitle: 'Pour cette sous-catégorie',
             experiences: null,
             isLoading: true,
-            loadingItemCount: 3,
+            // ✅ SUPPRIMÉ : loadingItemCount (utilise constante interne)
           ),
         ),
 
@@ -343,5 +358,4 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
         isFeatured: false
     );
   }
-
 }

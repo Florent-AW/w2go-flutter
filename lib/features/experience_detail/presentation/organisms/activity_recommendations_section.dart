@@ -1,6 +1,5 @@
 // lib/features/experience_detail/presentation/organisms/activity_recommendations_section.dart
 
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/domain/services/shared/activity_recommendation_service.dart';
@@ -42,11 +41,10 @@ class ActivityRecommendationsSection extends ConsumerWidget {
     return similarState.when(
       loading: () => GenericExperienceCarousel(
         key: ValueKey('similar_loading_$activityId'),
-        // ✅ CORRECTION : Pas de scrollController (utilise celui par défaut)
         title: ActivityRecommendationService.getSectionTitle('similar'),
         experiences: null,
         isLoading: true,
-        loadingItemCount: 8,
+        // ✅ SUPPRIMÉ : loadingItemCount (utilise constante interne _skeletonItemCount = 3)
         openBuilder: _buildUnifiedOpenBuilder(),
       ),
       error: (error, stack) {
@@ -79,12 +77,12 @@ class ActivityRecommendationsSection extends ConsumerWidget {
 
     return nearbyState.when(
       loading: () => GenericExperienceCarousel(
-        key: PageStorageKey('rec-nearby-$activityId'), // ✅ SOLUTION C
+        key: PageStorageKey('rec-nearby-$activityId'),
         title: ActivityRecommendationService.getSectionTitle('nearby'),
         heroPrefix: 'rec-nearby',
         experiences: null,
         isLoading: true,
-        loadingItemCount: 8,
+        // ✅ SUPPRIMÉ : loadingItemCount (utilise constante interne _skeletonItemCount = 3)
         showDistance: false,
         openBuilder: _buildUnifiedOpenBuilder(),
       ),
@@ -111,7 +109,6 @@ class ActivityRecommendationsSection extends ConsumerWidget {
       },
     );
   }
-
 
   /// ✅ NOUVEAU - OpenBuilder unifié pour Activities + Events
   Widget Function(BuildContext, VoidCallback, dynamic)? _buildUnifiedOpenBuilder() {

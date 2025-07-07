@@ -225,7 +225,6 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
                 title: 'Chargement catégorie ${index + 1}',
                 experiences: null,
                 isLoading: true,
-                loadingItemCount: 3,
                 showDistance: true,
               ),
             ),
@@ -414,9 +413,6 @@ class _CityPaginatedCarouselState extends ConsumerState<_CityPaginatedCarousel> 
         heroPrefix: 'city-${widget.categoryExp.category.id}-${widget.sectionExp.section.id}',
         openBuilder: widget.openBuilder,
         showDistance: true,
-        // ✅ RÉACTIVER T1/T2 automatiques
-        isPartial: paginationState.isPartial,
-        onRequestCompletion: null, // Le ref.listen gère T1
         onLoadMore: () => _loadMorePaginatedCarousel(params),
         onSeeAllPressed: () => widget.onSeeAllPressed(context, widget.categoryExp.category, widget.sectionExp.section),
       ),

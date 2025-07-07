@@ -1,11 +1,9 @@
 // lib/features/shared_ui/presentation/widgets/organisms/generic_experience_carousel.dart
 
 import 'package:flutter/material.dart';
-import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 import 'package:infinite_carousel/infinite_carousel.dart';
-import 'package:flutter/scheduler.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_dimensions.dart';
 import '../../../../../core/theme/app_typography.dart';
@@ -20,25 +18,51 @@ import '../../../../../core/domain/ports/providers/search/activity_distance_mana
 import '../../../../search/application/state/city_selection_state.dart';
 import '../molecules/featured_experience_card.dart';
 
-/// Carousel générique pour afficher différentes listes d'expériences (activités + événements)
-/// ✅ ÉVOLUTION vers ExperienceItem pour unifier Activities et Events
+/// Widget métier pour afficher des carrousels d'expériences (activités + événements)
+///
+/// Responsabilités:
+/// - Interface complète (titre, état, callbacks métier)
+/// - Gestion des états métier (loading, error, empty)
+/// - Intégration domain ExperienceItem
+/// - Délégation technique à InfinitePagingCarousel
+///
+/// La logique T0/T1/T2 est gérée par les wrappers parents via PaginationController
 class GenericExperienceCarousel extends ConsumerStatefulWidget {
-  /// [tous les paramètres existants restent identiques]
+  /// Titre du carrousel
   final String title;
+
+  /// Sous-titre optionnel
   final String? subtitle;
+
+  /// Liste des expériences à afficher
   final List<ExperienceItem>? experiences;
+
+  /// Indique un chargement en cours
   final bool isLoading;
+
+  /// Message d'erreur à afficher
   final String? errorMessage;
+
+  /// Callback pour le bouton "Voir tout"
   final VoidCallback? onSeeAllPressed;
-  final double height;
-  final int loadingItemCount;
-  final bool showDistance;
-  final Widget Function(BuildContext, VoidCallback, ExperienceItem)? openBuilder;
-  final InfiniteScrollController? scrollController;
-  final String? heroPrefix;
-  final bool isPartial;
-  final VoidCallback? onRequestCompletion;
+
+  /// Callback pour le lazy loading T2 (délégué à InfinitePagingCarousel)
   final VoidCallback? onLoadMore;
+
+  /// Hauteur du carrousel
+  final double height;
+
+  /// Afficher les distances
+  final bool showDistance;
+
+  /// Builder personnalisé pour l'ouverture d'expérience
+  final Widget Function(BuildContext, VoidCallback, ExperienceItem)? openBuilder;
+
+  /// Contrôleur de scroll optionnel
+  final InfiniteScrollController? scrollController;
+
+  /// Préfixe pour les hero tags (éviter conflits)
+  final String? heroPrefix;
 
   const GenericExperienceCarousel({
     Key? key,
@@ -48,15 +72,12 @@ class GenericExperienceCarousel extends ConsumerStatefulWidget {
     this.isLoading = false,
     this.errorMessage,
     this.onSeeAllPressed,
+    this.onLoadMore,
     this.height = 240.0,
-    this.loadingItemCount = 3,
-    this.openBuilder,
     this.showDistance = true,
+    this.openBuilder,
     this.scrollController,
     this.heroPrefix,
-    this.isPartial = false,
-    this.onRequestCompletion,
-    this.onLoadMore,
   }) : super(key: key);
 
   @override
@@ -64,73 +85,22 @@ class GenericExperienceCarousel extends ConsumerStatefulWidget {
 }
 
 class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCarousel> {
-  Timer? _completionTimer;
-  int _lastTriggerIndex = -1;
+  static const int _skeletonItemCount = 3;
 
   @override
-  void initState() {
-    super.initState();
-
-    // ✅ Timer immédiat si déjà partiel dès initState (ancien comportement)
-    if (widget.isPartial && widget.onRequestCompletion != null) {
-      print('🔄 TIMER T1: Démarrage immédiat pour ${widget.title}');
-      _scheduleCompletion();
-    }
-  }
-
-  @override
-  void dispose() {
-    _completionTimer?.cancel();
-    super.dispose();
-  }
-
-  /// ✅ NOUVEAU : Planifier la complétion automatique
-  void _scheduleCompletion() {
-    _completionTimer = Timer(const Duration(milliseconds: 1500), () {
-      if (mounted && widget.onRequestCompletion != null) {
-        print('🔄 COMPLÉTION T1: Déclenchement pour ${widget.title}');
-        widget.onRequestCompletion!();
-      }
-    });
-  }
-
-  /// Détecte si on doit charger plus d'items - SEUIL ADAPTATIF
-  void _checkLoadMore(int currentIndex) {
-    if (widget.onLoadMore == null) return;
-
-    final totalItems = widget.experiences?.length ?? 0;
-    if (totalItems == 0) return;
-
-    // ✅ CORRECTION 1 : Seuil adaptatif au lieu de fixe
-    final triggerPosition = (totalItems / 2).floor(); // Moitié du chunk courant
-
-    // Éviter triggers multiples au même index
-    if (currentIndex <= _lastTriggerIndex) return;
-
-    final shouldTrigger = currentIndex >= (totalItems - triggerPosition);
-
-    if (shouldTrigger) {
-      print('🔄 T2 LAZY LOADING: Trigger à l\'index $currentIndex/$totalItems (seuil adaptatif: $triggerPosition)');
-      _lastTriggerIndex = currentIndex;
-      widget.onLoadMore!();
-    }
-  }
-
-
-  @override
-  Widget build(BuildContext context) {  // ✅ Enlever WidgetRef ref du build
+  Widget build(BuildContext context) {
     // 1️⃣ Toujours afficher si loading (avec skeleton)
-    if (widget.isLoading) {  // ✅ Ajouter widget.
+    if (widget.isLoading) {
       return _buildFullSection(context);
     }
 
     // 2️⃣ Toujours afficher si erreur (avec message d'erreur)
-    if (widget.errorMessage != null) {  // ✅ Ajouter widget.
+    if (widget.errorMessage != null) {
       return _buildFullSection(context);
     }
 
-    // 3️⃣ NOUVEAU : Masquer complètement si vide (ni titre ni espace)
-    if (widget.experiences == null || widget.experiences!.isEmpty) {  // ✅ Ajouter widget.
+    // 3️⃣ Masquer complètement si vide (ni titre ni espace)
+    if (widget.experiences == null || widget.experiences!.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -138,7 +108,7 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
     return _buildFullSection(context);
   }
 
-  /// ✅ NOUVEAU : Méthode pour construire la section complète (titre + contenu)
+  /// Construit la section complète (titre + contenu)
   Widget _buildFullSection(BuildContext context) {
     final allDistances = ref.watch(activityDistancesProvider);
     final selectedCity = ref.watch(selectedCityProvider);
@@ -147,90 +117,91 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ✅ Titre et bouton "Voir tout"
-          Padding(
-            padding: EdgeInsets.only(
-              left: AppDimensions.spacingS,
-              right: AppDimensions.spacingS,
-              top: 0, // ✅ Top padding très réduit
-              bottom: AppDimensions.spacingXs, // ✅ Bottom normal
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.title,  // ✅ Ajouter widget.
-                      style: context.title,
-                    ),
-                  ],
-                ),
-                if (widget.onSeeAllPressed != null)  // ✅ Ajouter widget.
-                  TextButton(
-                    onPressed: widget.onSeeAllPressed,  // ✅ Ajouter widget.
-                    child: Text(
-                      'Voir tout',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+          // Header avec titre et bouton "Voir tout"
+          _buildHeader(context),
 
-          // ✅ Contenu du carousel
+          // Contenu du carousel
           Container(
             height: AppDimensions.activityCardHeight - 20,
-            child: _buildContent(context, ref, allDistances, selectedCity),
+            child: _buildContent(context, allDistances, selectedCity),
           ),
         ],
       ),
     );
   }
 
+  /// Construit le header avec titre et bouton "Voir tout"
+  Widget _buildHeader(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: AppDimensions.spacingS,
+        right: AppDimensions.spacingS,
+        top: 0,
+        bottom: AppDimensions.spacingXs,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.title,
+                style: context.title,
+              ),
+              if (widget.subtitle != null)
+                Text(
+                  widget.subtitle!,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.neutral600,
+                  ),
+                ),
+            ],
+          ),
+          if (widget.onSeeAllPressed != null)
+            TextButton(
+              onPressed: widget.onSeeAllPressed,
+              child: Text(
+                'Voir tout',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Construit le contenu du carousel (data, loading, ou erreur)
   Widget _buildContent(
       BuildContext context,
-      WidgetRef ref,
       Map<String, double> allDistances,
       City? selectedCity,
       ) {
     final baseKey = (widget.key is ValueKey) ? (widget.key as ValueKey).value : widget.key;
 
-    // ✅ Afficher le chargement
+    // État de chargement
     if (widget.isLoading) {
-      return _buildLoadingState(context);
+      return _buildLoadingState(context, baseKey);
     }
 
-
-    // ✅ Afficher le message d'erreur
+    // État d'erreur
     if (widget.errorMessage != null) {
-      return Center(
-        child: Text(
-          widget.errorMessage!,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppColors.error,
-          ),
-        ),
-      );
+      return _buildErrorState(context);
     }
 
-    // À ce stade, on est sûr d'avoir des expériences non vides
-
-    // Pré-calculer les distances avec garde
+    // Pré-calculer les distances si nécessaire
     if (widget.experiences?.isNotEmpty == true) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) { // ✅ Garde mounted
-          _precacheDistancesIfNeeded(widget.experiences!, ref, allDistances);
+        if (mounted) {
+          _precacheDistancesIfNeeded(widget.experiences!, allDistances);
         }
       });
     }
 
-    // ✅ Carousel avec données
-    // ✅ NOUVEAU : Utiliser InfinitePagingCarousel au lieu d'InfiniteCarousel
+    // Carousel avec données - Utilise InfinitePagingCarousel
     return AppDimensions.buildResponsiveCarousel(
       builder: (context, constraints) {
         final cardWidth = AppDimensions.calculateCarouselCardWidth(constraints);
@@ -240,17 +211,22 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
           items: widget.experiences!,
           height: AppDimensions.activityCardHeight - 20,
           scrollController: widget.scrollController,
-          // ✅ NOUVEAU : Props pour lazy loading
+
+          // Configuration lazy loading T2
           onLoadMore: widget.onLoadMore,
-          hasMore: true, // TODO: sera connecté au PaginationController
-          isLoading: false, // TODO: sera connecté au PaginationController
+          hasMore: true, // Sera connecté au PaginationController dans les wrappers
+          isLoading: false, // Sera connecté au PaginationController dans les wrappers
           lookAhead: 10,
-          precacheAhead: 3, // ✅ NOUVEAU : 3 images d'avance
-          getImageUrl: (experience) => experience.mainImageUrl, // ✅ NOUVEAU : Extraire URL
+
+          // Configuration pré-cache images
+          precacheAhead: 3,
+          getImageUrl: (experience) => experience.mainImageUrl,
+
+          // Builder des items
           itemBuilder: (context, experience, index) {
             final distance = allDistances[experience.id] ?? experience.distance ?? 0.0;
 
-            // ✅ GÉNÉRATION heroTag STABLE et UNIQUE
+            // Génération heroTag stable et unique
             final heroTag = widget.heroPrefix != null
                 ? 'activity-hero-${experience.id}-${widget.heroPrefix}'
                 : 'activity-hero-${experience.id}-${widget.title.toLowerCase().replaceAll(' ', '-')}';
@@ -264,38 +240,7 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
               showDistance: widget.showDistance,
               isFavorite: false,
               showSubcategory: true,
-              onTap: () async {
-                print('🎯 CAROUSEL TAP: heroTag = "$heroTag" pour ${experience.name}');
-
-                // ✅ NOUVEAU : Ramener la carte au centre avant navigation
-                if (widget.scrollController != null) {
-                  await widget.scrollController!.animateToItem(
-                    index,
-                    duration: const Duration(milliseconds: 120),
-                    curve: Curves.easeOut,
-                  );
-                }
-
-                if (experience.isEvent) {
-                  print('📅 Navigation vers événement: ${experience.name}');
-                  if (experience.asEvent != null) {
-                    NavigationUtils.navigateToEventDetail(
-                      context,
-                      event: experience.asEvent!,
-                      heroTag: heroTag,
-                    );
-                  } else {
-                    print('❌ CAROUSEL TAP: experience.asEvent est null !');
-                  }
-                } else {
-                  print('🏛️ Navigation avec NavigationUtils classique');
-                  NavigationUtils.navigateToActivityDetail(
-                    context,
-                    activity: experience.asActivity!,
-                    heroTag: heroTag,
-                  );
-                }
-              },
+              onTap: () => _handleExperienceTap(context, experience, heroTag, index),
             );
           },
         );
@@ -303,9 +248,48 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
     );
   }
 
-  Widget _buildLoadingState(BuildContext context) {
-    final baseKey = (widget.key is ValueKey) ? (widget.key as ValueKey).value : widget.key;
+  /// Gère le tap sur une expérience
+  Future<void> _handleExperienceTap(
+      BuildContext context,
+      ExperienceItem experience,
+      String heroTag,
+      int index,
+      ) async {
+    print('🎯 CAROUSEL TAP: heroTag = "$heroTag" pour ${experience.name}');
 
+    // Ramener la carte au centre avant navigation
+    if (widget.scrollController != null) {
+      await widget.scrollController!.animateToItem(
+        index,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+      );
+    }
+
+    // Navigation selon le type d'expérience
+    if (experience.isEvent) {
+      print('📅 Navigation vers événement: ${experience.name}');
+      if (experience.asEvent != null) {
+        NavigationUtils.navigateToEventDetail(
+          context,
+          event: experience.asEvent!,
+          heroTag: heroTag,
+        );
+      } else {
+        print('❌ CAROUSEL TAP: experience.asEvent est null !');
+      }
+    } else {
+      print('🏛️ Navigation vers activité: ${experience.name}');
+      NavigationUtils.navigateToActivityDetail(
+        context,
+        activity: experience.asActivity!,
+        heroTag: heroTag,
+      );
+    }
+  }
+
+  /// Construit l'état de chargement avec skeletons
+  Widget _buildLoadingState(BuildContext context, dynamic baseKey) {
     return AppDimensions.buildResponsiveCarousel(
       builder: (context, constraints) {
         final cardWidth = AppDimensions.calculateCarouselCardWidth(constraints);
@@ -316,7 +300,7 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
           child: InfiniteCarousel.builder(
             key: baseKey != null ? ValueKey('${baseKey}_loading') : null,
             controller: widget.scrollController,
-            itemCount: widget.loadingItemCount,
+            itemCount: _skeletonItemCount,
             itemExtent: itemExtent,
             anchor: 0.0,
             velocityFactor: 0.8,
@@ -327,7 +311,7 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
               itemExtent: itemExtent,
             ),
             itemBuilder: (context, index, realIndex) {
-              // ✅ Générer heroTag pour le skeleton
+              // Génération heroTag pour le skeleton
               final skeletonHeroTag = 'skeleton-hero-$index-${baseKey ?? 'default'}';
 
               return Padding(
@@ -337,27 +321,8 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
                 ),
                 child: FeaturedExperienceCard(
                   width: cardWidth,
-                  heroTag: skeletonHeroTag,  // ✅ AJOUT obligatoire
-                  experience: ExperienceItem.activity(
-                    // Mock activity pour le skeleton
-                    SearchableActivity(
-                      base: ActivityBase(
-                        id: 'skeleton-$index',
-                        name: 'Expérience skeleton ${index + 1}',
-                        description: 'Description exemple',
-                        latitude: 0.0,
-                        longitude: 0.0,
-                        categoryId: '',
-                        city: 'Ville exemple',
-                        bookingRequired: false,
-                      ),
-                      categoryName: 'Culture',
-                      subcategoryName: 'Exemple',
-                      subcategoryIcon: 'castle',
-                      distance: 5.0,
-                      mainImageUrl: 'https://picsum.photos/400/240',
-                    ),
-                  ),
+                  heroTag: skeletonHeroTag,
+                  experience: _createSkeletonExperience(index),
                   showDistance: widget.showDistance,
                   isFavorite: false,
                   showSubcategory: true,
@@ -365,18 +330,53 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
               );
             },
           ),
-        );      },
+        );
+      },
     );
   }
 
-  /// ✅ NOUVEAU : Pré-calcule les distances SEULEMENT si nécessaire (évite boucle infinie)
+  /// Construit l'état d'erreur
+  Widget _buildErrorState(BuildContext context) {
+    return Center(
+      child: Text(
+        widget.errorMessage!,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: AppColors.error,
+        ),
+      ),
+    );
+  }
+
+  /// Crée une expérience skeleton pour le loading
+  ExperienceItem _createSkeletonExperience(int index) {
+    return ExperienceItem.activity(
+      SearchableActivity(
+        base: ActivityBase(
+          id: 'skeleton-$index',
+          name: 'Expérience skeleton ${index + 1}',
+          description: 'Description exemple',
+          latitude: 0.0,
+          longitude: 0.0,
+          categoryId: '',
+          city: 'Ville exemple',
+          bookingRequired: false,
+        ),
+        categoryName: 'Culture',
+        subcategoryName: 'Exemple',
+        subcategoryIcon: 'castle',
+        distance: 5.0,
+        mainImageUrl: 'https://picsum.photos/400/240',
+      ),
+    );
+  }
+
+  /// Pré-calcule les distances SEULEMENT si nécessaire (évite boucle infinie)
   Future<void> _precacheDistancesIfNeeded(
       List<ExperienceItem> experiences,
-      WidgetRef ref,
       Map<String, double> currentDistances,
       ) async {
     try {
-      // ✅ GARDE : Vérifier si les distances sont déjà calculées
+      // Vérifier si les distances sont déjà calculées
       final missingExperiences = experiences.where((experience) =>
       !currentDistances.containsKey(experience.id)).toList();
 
@@ -396,7 +396,7 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
       lon: experience.longitude,
       )).toList();
 
-      // Utiliser la méthode batch du nouveau système
+      // Utiliser la méthode batch du système de distances
       await distanceNotifier.cacheActivitiesDistances(experiencesData);
 
       print('✅ DISTANCE CACHE: ${missingExperiences.length} distances calculées');
@@ -404,25 +404,4 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
       print('❌ DISTANCE CACHE: Erreur $e');
     }
   }
-
-  @override
-  void didUpdateWidget(covariant GenericExperienceCarousel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    // ✅ RESET _lastTriggerIndex quand les items augmentent (loadMore réussi)
-    final oldItemCount = oldWidget.experiences?.length ?? 0;
-    final newItemCount = widget.experiences?.length ?? 0;
-
-    if (newItemCount > oldItemCount) {
-      print('🔄 T2 RESET: Items passés de $oldItemCount → $newItemCount, reset trigger index');
-      _lastTriggerIndex = -1; // ✅ Reset pour permettre nouveaux triggers
-    }
-
-    // ✅ Détecter le passage false → true pour isPartial
-    if (!oldWidget.isPartial && widget.isPartial && widget.onRequestCompletion != null) {
-      print('🔄 TIMER T1: Détection false→true pour ${widget.title}');
-      _scheduleCompletion();
-    }
-  }
-
 }

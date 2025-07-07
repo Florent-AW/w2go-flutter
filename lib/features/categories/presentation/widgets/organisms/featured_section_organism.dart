@@ -16,7 +16,8 @@ import '../../../../preload/application/preload_providers.dart';
 import '../../../application/providers/category_experiences_controller.dart';
 
 /// Organism pour afficher la section Featured d'une catégorie
-/// Remplace les méthodes _buildFeaturedSection, _buildMultipleFeaturedSections, etc.
+/// Utilise encore l'ancien système PreloadController + CategoryExperiencesController
+/// TODO: Migrer vers PaginationController comme CityPage
 class FeaturedSectionOrganism extends ConsumerStatefulWidget {
   /// La catégorie actuellement affichée
   final CategoryViewModel currentCategory;
@@ -171,6 +172,20 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
                       return const SizedBox.shrink(); // ✅ Rien du tout si vide
                     }
 
+                    // ✅ NOUVEAU : Détecter si partiel et implémenter timer T1 ici
+                    final isPartial = _isCarouselPartial(widget.currentCategory.id, section.id);
+
+                    // ✅ Timer T1 automatique si partiel
+                    if (isPartial) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        Future.delayed(const Duration(milliseconds: 1500), () {
+                          if (mounted) {
+                            _completeCarousel(widget.currentCategory.id, section.id);
+                          }
+                        });
+                      });
+                    }
+
                     // ✅ Container seulement si il y a du contenu + contrôleur unique
                     return Container(
                       padding: EdgeInsets.only(bottom: 4.0),
@@ -180,8 +195,7 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
                         title: section.title,
                         heroPrefix: 'featured-${widget.currentCategory.id}-${section.id}',
                         experiences: experiences,
-                        isPartial: _isCarouselPartial(widget.currentCategory.id, section.id), // ✅ AJOUT
-                        onRequestCompletion: () => _completeCarousel(widget.currentCategory.id, section.id), // ✅ AJOUT
+                        // ✅ SUPPRIMÉ : isPartial et onRequestCompletion (gérés par timer ci-dessus)
                         openBuilder: _buildOpenBuilder(),
                       ),
                     );
@@ -196,8 +210,7 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
                       heroPrefix: 'featured-${widget.currentCategory.id}-${section.id}',
                       experiences: null,
                       isLoading: true,
-                      isPartial: false, // ✅ AJOUT - pas partiel en loading
-                      onRequestCompletion: null, // ✅ AJOUT - pas de complétion en loading
+                      // ✅ SUPPRIMÉ : isPartial et onRequestCompletion
                     ),
                   ),
                   error: (error, stack) => const SizedBox.shrink(), // ✅ Masquer les erreurs
@@ -219,8 +232,7 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
           heroPrefix: 'featured-${widget.currentCategory.id}',
           experiences: null,
           isLoading: true,
-          isPartial: false, // ✅ AJOUT - pas partiel en loading
-          onRequestCompletion: null, // ✅ AJOUT - pas de complétion en loading
+          // ✅ SUPPRIMÉ : isPartial et onRequestCompletion
         ),
       ),
       error: (error, stack) => const SizedBox.shrink(), // ✅ Masquer les erreurs
