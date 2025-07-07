@@ -367,7 +367,14 @@ class _CityPaginatedCarouselState extends ConsumerState<_CityPaginatedCarousel> 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && !_hasInitialized) {
           _hasInitialized = true;
-          ref.read(cityActivitiesPaginationProvider(params).notifier).loadPreload();
+
+          final controller = ref.read(cityActivitiesPaginationProvider(params).notifier);
+          final currentState = ref.read(cityActivitiesPaginationProvider(params));
+
+          if (currentState.items.isEmpty && !currentState.isLoading) {
+            print('🚀 PAGINATION INIT: ${widget.sectionExp.section.title}');
+            controller.loadPreload(); // ✅ RETOUR à loadPreload
+          }
         }
       });
     }
@@ -376,22 +383,17 @@ class _CityPaginatedCarouselState extends ConsumerState<_CityPaginatedCarousel> 
   @override
   Widget build(BuildContext context) {
     final selectedCity = ref.watch(selectedCityProvider);
-
-    if (selectedCity == null) {
-      return SizedBox.shrink();
-    }
+    if (selectedCity == null) return SizedBox.shrink();
 
     final paginationState = ref.watch(cityActivitiesPaginationProvider(params));
 
-    // ✅ NOUVEAU : Écouter les changements d'état pour T1
+    // ✅ RÉACTIVER T1 automatique
     ref.listen<PaginationState<ExperienceItem>>(
       cityActivitiesPaginationProvider(params),
           (previous, next) {
-        // Détecter le passage false → true pour isPartial
         if (previous != null && !previous.isPartial && next.isPartial) {
           print('🔄 T1 REF.LISTEN: Détection false→true pour ${widget.sectionExp.section.title}');
 
-          // Déclencher complétion après 1.5s
           Future.delayed(const Duration(milliseconds: 1500), () {
             if (mounted) {
               print('🔄 T1 REF.LISTEN: Complétion pour ${widget.sectionExp.section.title}');
@@ -406,22 +408,21 @@ class _CityPaginatedCarouselState extends ConsumerState<_CityPaginatedCarousel> 
       child: GenericExperienceCarousel(
         key: ValueKey('city-${widget.cityId}-${widget.categoryExp.category.id}-${widget.sectionExp.section.id}'),
         title: widget.sectionExp.section.title,
-        experiences: paginationState.items.isNotEmpty
-            ? paginationState.items
-            : widget.sectionExp.experiences,
+        experiences: paginationState.items,
         isLoading: paginationState.isLoading,
         errorMessage: paginationState.error,
         heroPrefix: 'city-${widget.categoryExp.category.id}-${widget.sectionExp.section.id}',
         openBuilder: widget.openBuilder,
         showDistance: true,
-        // ✅ SIMPLIFICATION : Plus besoin de isPartial et onRequestCompletion
-        // isPartial: paginationState.isPartial,
-        // onRequestCompletion: () => _completePaginatedCarousel(params),
+        // ✅ RÉACTIVER T1/T2 automatiques
+        isPartial: paginationState.isPartial,
+        onRequestCompletion: null, // Le ref.listen gère T1
         onLoadMore: () => _loadMorePaginatedCarousel(params),
         onSeeAllPressed: () => widget.onSeeAllPressed(context, widget.categoryExp.category, widget.sectionExp.section),
       ),
     );
   }
+
 
   /// ✅ CORRECTION : Déclenche le lazy loading T2 - AVEC GARDE ANTI-DUPLICATION
   void _loadMorePaginatedCarousel(CityCarouselParams params) {

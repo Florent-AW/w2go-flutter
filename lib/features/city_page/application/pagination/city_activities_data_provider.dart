@@ -1,3 +1,5 @@
+// lib/features/city_page/application/pagination/city_activities_data_provider.dart
+
 import '../../../../core/domain/pagination/paginated_data_provider.dart';
 import '../../../../core/domain/pagination/paginated_result.dart';
 import '../../../../core/domain/models/shared/experience_item.dart';
@@ -47,7 +49,6 @@ class CityActivitiesDataProvider extends ExperienceDataProvider {
 
   @override
   String? get subcategoryId => null;
-
   @override
   Future<PaginatedResult<ExperienceItem>> loadPage({
     required int offset,
@@ -55,7 +56,8 @@ class CityActivitiesDataProvider extends ExperienceDataProvider {
     Map<String, dynamic>? filters,
   }) async {
     try {
-      print('🔄 CITY PAGINATION: Loading page offset=$offset, limit=$limit pour ${providerId}');
+      // ✅ AJOUT : Log pour debug
+      print('🗂️ PROVIDER $providerId: offset=$offset limit=$limit');
 
       const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
       final isEvents = _categoryId == eventsCategoryId;
@@ -63,17 +65,15 @@ class CityActivitiesDataProvider extends ExperienceDataProvider {
       List<ExperienceItem> items;
 
       if (isEvents) {
-        // Charger événements
         final events = await _ref.read(getEventsUseCaseProvider).execute(
           latitude: latitude,
           longitude: longitude,
           sectionId: sectionId,
           categoryId: categoryId!,
           limit: limit,
-          offset: offset, // ✅ NOUVEAU : utiliser offset
+          offset: offset,
         );
 
-        // Cache des distances
         if (events.isNotEmpty) {
           _ref.read(activityDistancesProvider.notifier).cacheActivitiesDistances(
             events.map((event) => (
@@ -86,17 +86,15 @@ class CityActivitiesDataProvider extends ExperienceDataProvider {
 
         items = events.map((event) => ExperienceItem.event(event)).toList();
       } else {
-        // Charger activités
         final activities = await _ref.read(getActivitiesUseCaseProvider).execute(
           latitude: latitude,
           longitude: longitude,
           sectionId: sectionId,
           categoryId: categoryId,
           limit: limit,
-          offset: offset, // ✅ NOUVEAU : utiliser offset
+          offset: offset,
         );
 
-        // Cache des distances
         if (activities.isNotEmpty) {
           _ref.read(activityDistancesProvider.notifier).cacheActivitiesDistances(
             activities.map((activity) => (
@@ -110,13 +108,16 @@ class CityActivitiesDataProvider extends ExperienceDataProvider {
         items = activities.map((activity) => ExperienceItem.activity(activity)).toList();
       }
 
-      // Utiliser l'indicateur du backend si disponible, sinon fallback
-      final hasMore = items.length == limit;
-      final nextOffset = offset + items.length;
+      // ✅ NOUVEAU : Logger les IDs retournés par la RPC
+      final itemIds = items.map((item) => item.id).toList();
+      print('🗂️ PROVIDER $providerId: IDs retournés = ${itemIds.join(", ")}');
 
-      // ✅ DEBUG : Logger pour comprendre les cas limites
-      print('✅ CITY PAGINATION: ${items.length} items loaded, hasMore=$hasMore, nextOffset=$nextOffset');
-      print('   📊 DEBUG: requested=$limit, received=${items.length}, ratio=${items.length}/$limit');
+      // ✅ Calculer les valeurs (une seule fois)
+      final nextOffset = offset + items.length;
+      final hasMore = items.length == limit;
+
+      // ✅ AJOUT : Log pour vérifier
+      print('🗂️ PROVIDER $providerId: → returned=${items.length} nextOffset=$nextOffset hasMore=$hasMore');
 
       return PaginatedResult(
         items: items,
@@ -125,7 +126,7 @@ class CityActivitiesDataProvider extends ExperienceDataProvider {
       );
 
     } catch (e) {
-      print('❌ CITY PAGINATION: Erreur ${providerId}: $e');
+      print('❌ CITY PAGINATION: Erreur $providerId: $e');
       rethrow;
     }
   }

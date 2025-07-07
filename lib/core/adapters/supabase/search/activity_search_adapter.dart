@@ -28,6 +28,7 @@ class ActivitySearchAdapter implements ActivitySearchPort {
         'p_latitude': latitude,
         'p_longitude': longitude,
         'p_limit': filter.limit,
+        'p_offset': filter.offset,
       };
 
 // Ajouter les paramètres conditionnellement
