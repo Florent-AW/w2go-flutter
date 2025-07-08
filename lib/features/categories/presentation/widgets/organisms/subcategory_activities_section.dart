@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:infinite_carousel/infinite_carousel.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_dimensions.dart';
 import '../../../../../core/domain/models/shared/subcategory_model.dart';
@@ -10,18 +9,16 @@ import '../../../../../core/domain/models/activity/search/searchable_activity.da
 import '../../../../../core/domain/models/event/search/searchable_event.dart';
 import '../../../../../core/domain/models/shared/experience_item.dart';
 import '../../../../experience_detail/presentation/pages/experience_detail_page.dart';
-import '../../../../../features/search/application/state/experience_providers.dart';
 import '../../../../../features/search/application/state/section_discovery_providers.dart';
 import '../../../../../features/search/application/state/city_selection_state.dart';
 import '../../../../../features/shared_ui/presentation/widgets/organisms/generic_experience_carousel.dart';
-import '../../../../../features/preload/application/preload_providers.dart';
-import '../../../application/providers/category_experiences_controller.dart';
+import '../../../../shared_ui/presentation/widgets/molecules/experience_carousel_wrapper.dart';
+import '../../../application/pagination/category_pagination_providers.dart';
 import '../../../application/state/categories_provider.dart';
 import '../../../application/state/subcategories_provider.dart';
 
 /// Widget pour afficher les sections d'activités d'une sous-catégorie
-/// Utilise encore l'ancien système PreloadController + CategoryExperiencesController
-/// TODO: Migrer vers PaginationController comme CityPage
+/// Utilise le wrapper unifié ExperienceCarouselWrapper (architecture identique CityPage)
 class SubcategoryActivitiesSection extends ConsumerStatefulWidget {
   final Widget Function(BuildContext, VoidCallback, SearchableActivity)? openBuilder;
 
@@ -35,39 +32,12 @@ class SubcategoryActivitiesSection extends ConsumerStatefulWidget {
 }
 
 class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivitiesSection> {
-  // ✅ Stockage stable des contrôleurs par section
-  final Map<String, InfiniteScrollController> _scrollControllers = {};
-
-  // ✅ Tracker les changements pour reset les positions
-  String? _lastCategoryId;
-  String? _lastSubcategoryId;
 
   @override
   void dispose() {
-    // ✅ Nettoyer tous les contrôleurs
-    for (final controller in _scrollControllers.values) {
-      controller.dispose();
-    }
-    _scrollControllers.clear();
     super.dispose();
   }
 
-  // ✅ Méthode pour obtenir/créer un contrôleur stable
-  InfiniteScrollController _getControllerForSection(String sectionKey) {
-    return _scrollControllers.putIfAbsent(
-      sectionKey,
-          () => InfiniteScrollController(initialItem: 0),
-    );
-  }
-
-  // ✅ Méthode pour reset tous les contrôleurs
-  void _resetAllControllers() {
-    for (final controller in _scrollControllers.values) {
-      if (controller.hasClients) {
-        controller.jumpToItem(0);
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,188 +50,120 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
       return _buildNoSubcategorySelectedUI(context);
     }
 
-    // ✅ Provider intelligent avec fallback spécifique → générique
+    // Si aucune ville sélectionnée
+    if (selectedCity == null) {
+      return _buildLoadingSkeleton(context, selectedSubcategory);
+    }
+
+    return _buildSubcategorySections(context, currentCategory, selectedSubcategory, selectedCity);
+  }
+
+  /// Construit les sections Subcategory avec le wrapper unifié (pattern CityPage)
+  Widget _buildSubcategorySections(BuildContext context, dynamic currentCategory, Subcategory selectedSubcategory, dynamic selectedCity) {
     final sectionsAsync = ref.watch(effectiveSubcategorySectionsProvider(currentCategory?.id));
 
-    // ✅ Provider unifié Activities + Events
-    final sectionsDataAsync = ref.watch(subcategorySectionExperiencesProvider((
-    categoryId: currentCategory?.id ?? '',
-    subcategoryId: selectedSubcategory.id,
-    city: selectedCity,
-    )));
+    return sectionsAsync.when(
+      data: (sections) {
+        if (sections.isEmpty) {
+          return _buildNoSectionsAvailableUI(context);
+        }
 
-    // Déterminer si les données sont chargées
-    final bool sectionsLoaded = sectionsAsync is AsyncData;
-    final bool dataLoaded = sectionsDataAsync is AsyncData;
-    final bool hasError = sectionsAsync is AsyncError || sectionsDataAsync is AsyncError;
+        final sectionWidgets = <Widget>[];
 
-    // Afficher l'erreur si présente
-    if (hasError) {
-      final error = (sectionsAsync is AsyncError)
-          ? (sectionsAsync as AsyncError).error
-          : (sectionsDataAsync as AsyncError).error;
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Text(
-            "Erreur de chargement: $error",
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.error,
-            ),
-          ),
-        ),
-      );
-    }
+        for (final section in sections) {
+          final params = createSubcategoryParams(
+            city: selectedCity,
+            sectionId: section.id,
+            categoryId: currentCategory?.id ?? '',
+            subcategoryId: selectedSubcategory.id,
+          );
 
-    // Transition fluide avec Stack+Opacity
-    return Stack(
-      children: [
-        // Contenu réel (invisible pendant le chargement)
-        Opacity(
-          opacity: (sectionsLoaded && dataLoaded) ? 1.0 : 0.0,
-          child: _buildLoadedContent(
-            context,
-            sectionsAsync.value ?? [],
-            sectionsDataAsync.value ?? {},
-            selectedSubcategory,
-            selectedCity,
-            currentCategory,
-          ),
-        ),
-
-        // Shimmer (visible uniquement pendant le chargement)
-        if (!sectionsLoaded || !dataLoaded)
-          _buildSkeletonWithSameStructure(currentCategory, selectedSubcategory),
-      ],
-    );
-  }
-
-  Widget _buildLoadedContent(
-      BuildContext context,
-      List sections,
-      Map<String, List<ExperienceItem>> sectionActivities,
-      Subcategory selectedSubcategory,
-      dynamic selectedCity,
-      dynamic currentCategory,
-      ) {
-    // ✅ Détecter changement de catégorie/sous-catégorie pour reset
-    final currentCategoryId = currentCategory?.id;
-    final currentSubcategoryId = selectedSubcategory.id;
-
-    final hasChanged = _lastCategoryId != currentCategoryId ||
-        _lastSubcategoryId != currentSubcategoryId;
-
-    if (hasChanged) {
-      _resetAllControllers();
-      _lastCategoryId = currentCategoryId;
-      _lastSubcategoryId = currentSubcategoryId;
-    }
-
-    if (sections.isEmpty) {
-      return _buildNoSectionsAvailableUI(context);
-    }
-
-    if (sectionActivities.isEmpty) {
-      return _buildNoActivitiesFoundUI(context, selectedSubcategory.name);
-    }
-
-    // ✅ Créer un carousel unifié pour chaque section
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(height: AppDimensions.spacingXs),
-        ...sections.map((section) {
-          final sectionKey = 'section-${section.id}';
-          final experiences = sectionActivities[sectionKey] ?? [];
-
-          if (experiences.isEmpty) {
-            return SizedBox.shrink();
-          }
-
-          // ✅ NOUVEAU : Détecter si partiel et implémenter timer T1
-          final isPartial = _isCarouselPartial(currentCategoryId, section.id);
-
-          // ✅ Timer T1 automatique si partiel
-          if (isPartial) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              Future.delayed(const Duration(milliseconds: 1500), () {
-                if (mounted) {
-                  _completeCarousel(currentCategoryId, section.id);
-                }
-              });
-            });
-          }
-
-          return RepaintBoundary(
-            child: GenericExperienceCarousel(
-              key: ValueKey(
-                'carousel_${currentCategoryId}_${currentSubcategoryId}_${section.id}',
+          sectionWidgets.add(
+            Container(
+              margin: EdgeInsets.only(bottom: AppDimensions.spacingXs),
+              child: ExperienceCarouselWrapper(
+                key: ValueKey('subcategory_unified_${currentCategory?.id}_${selectedSubcategory.id}_${section.id}'),
+                paginationProvider: categorySubcategoryPaginationProvider,
+                providerParams: params,
+                title: section.title,
+                heroPrefix: 'subcategory-${currentCategory?.id}-${selectedSubcategory.id}-${section.id}',
+                openBuilder: _buildOpenBuilder(),
+                showDistance: true,
+                // Pas de onSeeAllPressed pour Subcategory
               ),
-              scrollController: _getControllerForSection(
-                '${currentCategoryId}_${currentSubcategoryId}_${section.id}',
-              ),
-              title: section.title,
-              heroPrefix: 'subcategory-${currentCategoryId}-${currentSubcategoryId}-${section.id}',
-              subtitle: "Pour ${selectedSubcategory.name}",
-              experiences: experiences,
-              isLoading: false,
-              // ✅ SUPPRIMÉ : isPartial et onRequestCompletion (gérés par timer ci-dessus)
-              openBuilder: widget.openBuilder != null
-                  ? (context, action, experience) {
-                if (experience.isEvent) {
-                  print('Navigation vers événement: ${experience.name}');
-                  return ExperienceDetailPage(
-                    experienceItem: experience is ExperienceItem
-                        ? experience
-                        : ExperienceItem.event(experience as SearchableEvent),
-                    onClose: action,
-                  );
-                } else {
-                  return widget.openBuilder!(context, action, experience.asActivity!);
-                }
-              }
-                  : null,
             ),
           );
-        }).toList(),
-        const SizedBox(height: 80),
-      ],
+        }
+
+        if (sectionWidgets.isEmpty) {
+          return _buildNoActivitiesFoundUI(context, selectedSubcategory.name);
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(height: AppDimensions.spacingXs),
+            ...sectionWidgets,
+            const SizedBox(height: 80),
+          ],
+        );
+      },
+      loading: () => _buildLoadingSkeleton(context, selectedSubcategory),
+      error: (error, stack) {
+        print('❌ SUBCATEGORY SECTIONS: Erreur: $error');
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Text(
+              "Erreur de chargement: $error",
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.error,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
-  // ✅ Skeleton unifié avec GenericExperienceCarousel
-  Widget _buildSkeletonWithSameStructure(dynamic currentCategory, Subcategory? selectedSubcategory) {
+  /// OpenBuilder unifié pour les expériences
+  Widget Function(BuildContext, VoidCallback, ExperienceItem)? _buildOpenBuilder() {
+    return widget.openBuilder != null
+        ? (context, action, experience) {
+      if (experience is ExperienceItem) {
+        return ExperienceDetailPage(
+          experienceItem: experience,
+          onClose: action,
+        );
+      } else {
+        // Fallback legacy
+        if (experience.isEvent) {
+          return ExperienceDetailPage(
+            experienceItem: ExperienceItem.event(experience as SearchableEvent),
+            onClose: action,
+          );
+        } else {
+          return widget.openBuilder!(context, action, experience.asActivity!);
+        }
+      }
+    }
+        : null;
+  }
+
+  Widget _buildLoadingSkeleton(BuildContext context, Subcategory selectedSubcategory) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(height: AppDimensions.spacingXs),
-
-        RepaintBoundary(
+        Container(
+          height: AppDimensions.activityCardHeight + AppDimensions.space20,
+          margin: EdgeInsets.only(bottom: AppDimensions.spacingXs),
           child: GenericExperienceCarousel(
-            key: ValueKey('loading_carousel_${currentCategory?.id}_${selectedSubcategory?.id}_1'),
-            scrollController: _getControllerForSection('loading_1'),
-            title: 'Section exemple 1',
-            heroPrefix: 'subcategory-loading-1-${currentCategory?.id}_${selectedSubcategory?.id}',
-            subtitle: 'Pour cette sous-catégorie',
+            title: 'Chargement sections...',
             experiences: null,
             isLoading: true,
-            // ✅ SUPPRIMÉ : loadingItemCount (utilise constante interne)
           ),
         ),
-
-        RepaintBoundary(
-          child: GenericExperienceCarousel(
-            key: ValueKey('loading_carousel_${currentCategory?.id}_${selectedSubcategory?.id}_2'),
-            scrollController: _getControllerForSection('loading_2'),
-            title: 'Section exemple 2',
-            heroPrefix: 'subcategory-loading-2-${currentCategory?.id}_${selectedSubcategory?.id}',
-            subtitle: 'Pour cette sous-catégorie',
-            experiences: null,
-            isLoading: true,
-            // ✅ SUPPRIMÉ : loadingItemCount (utilise constante interne)
-          ),
-        ),
-
         const SizedBox(height: 80),
       ],
     );
@@ -321,41 +223,5 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
     );
   }
 
-  /// Détermine si un carrousel est partiel (chargé avec 5 items au lieu de 10+)
-  bool _isCarouselPartial(String? categoryId, String sectionId) {
-    final preloadData = ref.read(preloadControllerProvider);
 
-    // Chercher dans les infos de preload
-    final carouselInfo = preloadData.carouselsInfo
-        .where((info) => info.categoryId == categoryId && info.sectionId == sectionId)
-        .firstOrNull;
-
-    return carouselInfo?.isPartial ?? false;
-  }
-
-  /// Déclenche la complétion d'un carrousel
-  void _completeCarousel(String? categoryId, String sectionId) {
-    print('🔄 DEMANDE COMPLÉTION SUBCATEGORY pour catégorie: $categoryId, section: $sectionId');
-
-    if (categoryId == null) {
-      print('❌ COMPLETION: categoryId null');
-      return;
-    }
-
-    // Récupérer la ville sélectionnée
-    final selectedCity = ref.read(selectedCityProvider);
-    if (selectedCity == null) {
-      print('❌ COMPLETION: Pas de ville sélectionnée');
-      return;
-    }
-
-    // Appeler le controller pour compléter le carrousel subcategory
-    ref.read(categoryExperiencesControllerProvider.notifier)
-        .completeCarouselForCategory(
-        categoryId,
-        sectionId,
-        selectedCity,
-        isFeatured: false
-    );
-  }
 }
