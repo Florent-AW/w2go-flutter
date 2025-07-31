@@ -30,31 +30,23 @@ import 'features/search/application/state/city_selection_state.dart';
 import 'core/domain/models/shared/city_model.dart';
 
 void main() async {
-
   try {
     WidgetsFlutterBinding.ensureInitialized();
+    await dotenv.load(fileName: ".env");
 
-    // ← Permet au contenu Flutter de se dessiner derrière les barres système
-    await SystemChrome.setEnabledSystemUIMode(
-      SystemUiMode.edgeToEdge,
-    );
-
-    // ✅ Initialiser la locale française
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     await initializeDateFormatting('fr_FR', null);
 
-    // ← Puis on rend la status bar elle-même totalement transparente
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,  // ou dark selon votre cover
-        statusBarBrightness: Brightness.dark,       // pour iOS
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
       ),
     );
 
-    // Initialisation de Hive pour le cache de localisation
     await Hive.initFlutter();
 
-    // Enregistrement des adaptateurs pour les objets de localisation
     if (!Hive.isAdapterRegistered(userLocationTypeId)) {
       Hive.registerAdapter(UserLocationAdapter());
     }
@@ -65,54 +57,41 @@ void main() async {
       Hive.registerAdapter(PlaceSuggestionAdapter());
     }
 
-    // Initialisation des boîtes Hive
     final cacheAdapter = HiveLocationCacheAdapter();
     await cacheAdapter.initializeAsync();
-    print('✅ Initialisation du cache Hive terminée au démarrage de l\'application');
 
-    // Initialisations existantes
-    await dotenv.load(fileName: ".env");
     await SupabaseService.initialize();
     final googleConfig = await GoogleServicesConfig.init();
 
-    // Charger la ville précédemment sélectionnée depuis le stockage
-    final Box cityBox = await Hive.openBox('cityPreferences');
+    final cityBox = await Hive.openBox('cityPreferences');
     final cityJson = cityBox.get('selectedCity');
     final City? savedCity = cityJson != null
         ? City.fromJson(json.decode(cityJson))
         : null;
 
-    // ✅ EXPERT 2025 : Configuration du cache pour les images (optimisé pour 120 fps)
     PaintingBinding.instance.imageCache?.maximumSizeBytes = 360 * 1024 * 1024;
-    PaintingBinding.instance.imageCache?.maximumSize = 1000; // ✅ Limite le nombre d'images
+    PaintingBinding.instance.imageCache?.maximumSize = 1000;
 
     runApp(
-        ProviderScope(
-            overrides: [
-              // Ajout de la surcharge ici
-              googleServicesConfigProvider.overrideWithValue(googleConfig),
-              // Injecter la ville précédemment sauvegardée (si elle existe)
-              if (savedCity != null)
-                selectedCityProvider.overrideWith((ref) => CitySelectionNotifier(savedCity)),
-              // Adapter pour les recherches récentes
-              recentCitiesPortProvider.overrideWithProvider(
-                Provider((ref) {
-                  final adapter = HiveRecentCitiesAdapter();
-                  // Initialisation synchrone ou via FutureProvider si nécessaire
-                  adapter.initializeAsync();
-                  return adapter;
-                }),
-              ),
-
-              // Adapter pour les villes suggérées
-              suggestedCitiesPortProvider.overrideWithProvider(
-                Provider((ref) => SupabaseSuggestedCitiesAdapter.fromService(
-                    Supabase.instance.client
-                )),
-              ),
-            ],
-            child: const MyApp()
-        )
+      ProviderScope(
+        overrides: [
+          googleServicesConfigProvider.overrideWithValue(googleConfig),
+          if (savedCity != null)
+            selectedCityProvider.overrideWith((ref) => CitySelectionNotifier(savedCity)),
+          recentCitiesPortProvider.overrideWithProvider(
+            Provider((ref) {
+              final adapter = HiveRecentCitiesAdapter();
+              adapter.initializeAsync();
+              return adapter;
+            }),
+          ),
+          suggestedCitiesPortProvider.overrideWithProvider(
+            Provider((ref) => SupabaseSuggestedCitiesAdapter.fromService(
+                Supabase.instance.client)),
+          ),
+        ],
+        child: const MyApp(),
+      ),
     );
   } catch (e) {
     print('Error initializing app: $e');

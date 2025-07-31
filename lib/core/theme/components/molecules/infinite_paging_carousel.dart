@@ -81,13 +81,10 @@ class _InfinitePagingCarouselState<T> extends State<InfinitePagingCarousel<T>> {
     super.initState();
 
     // ✅ CORRECTIF : Position initiale alignée sur le premier item
-    final initialPosition = widget.items.isNotEmpty
-        ? (1 << 20) - ((1 << 20) % widget.items.length)  // Multiple exact de items.length
-        : 1 << 20;
+    final initialPosition = 0;
 
-    _infiniteController = widget.scrollController ?? InfiniteScrollController(
-      initialItem: initialPosition,
-    );
+    _infiniteController = widget.scrollController ??
+        InfiniteScrollController(initialItem: initialPosition);
 
     _currentRealIndexNotifier = ValueNotifier<int>(0);
   }
