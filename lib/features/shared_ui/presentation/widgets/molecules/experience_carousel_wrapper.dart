@@ -118,25 +118,26 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
       final paginationState = ref.watch(widget.paginationProvider(widget.providerParams));
 
       // ✅ T1 AUTOMATIQUE VIA REF.LISTEN (pattern unifié)
-      ref.listen<PaginationState<ExperienceItem>>(
-        widget.paginationProvider(widget.providerParams),
-            (previous, next) {
-          if (previous != null && !previous.isPartial && next.isPartial) {
-            print('🔄 WRAPPER T1 REF.LISTEN: Détection false→true pour ${widget.title}');
-
-            Future.delayed(const Duration(milliseconds: 1500), () {
-              if (mounted) {
-                try {
-                  print('🔄 WRAPPER T1 REF.LISTEN: Complétion pour ${widget.title}');
-                  ref.read(widget.paginationProvider(widget.providerParams).notifier).completeIfPartial();
-                } catch (e) {
-                  print('❌ WRAPPER T1: Erreur complétion ${widget.title}: $e');
-                }
-              }
-            });
-          }
-        },
-      );
+      // ref.listen<PaginationState<ExperienceItem>>(
+      //   widget.paginationProvider(widget.providerParams),
+      //       (previous, next) {
+      //     if (previous != null && !previous.isPartial && next.isPartial) {
+      //       print('🔄 WRAPPER T1 REF.LISTEN: Détection false→true pour ${widget.title}');
+      //
+      //       Future.delayed(const Duration(milliseconds: 1500), () {
+      //         if (mounted) {
+      //           try {
+      //             print('🔄 WRAPPER T1 REF.LISTEN: Complétion pour ${widget.title}');
+      //             ref.read(widget.paginationProvider(widget.providerParams).notifier).completeIfPartial();
+      //           } catch (e) {
+      //             print('❌ WRAPPER T1: Erreur complétion ${widget.title}: $e');
+      //           }
+      //         }
+      //       });
+      //     }
+      //   },
+      // );
+      print('🚫 WRAPPER ref.listen DÉSACTIVÉ temporairement pour Step 1');
 
       // ✅ DONNÉES HYBRIDES : Pagination prioritaire, fallback si nécessaire
       final experiences = paginationState.items.isNotEmpty
