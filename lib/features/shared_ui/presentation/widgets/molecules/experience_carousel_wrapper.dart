@@ -1,11 +1,10 @@
-// lib/shared_ui/presentation/widgets/molecules/experience_carousel_wrapper.dart
+// lib/features/shared_ui/presentation/widgets/molecules/experience_carousel_wrapper.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/application/pagination_controller.dart';
 import '../../../../../core/domain/models/shared/experience_item.dart';
-import '../../../../preload/application/preload_providers.dart';
-import '../../../../preload/application/preload_controller.dart';
+import '../../../../../core/application/all_data_preloader.dart';
 import '../organisms/generic_experience_carousel.dart';
 
 /// Wrapper stateful unifié pour tous les carrousels avec pagination
@@ -209,13 +208,13 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
     }
   }
 
-  /// Récupère les données préchargées depuis PreloadController si disponibles
+  /// Récupère les données préchargées depuis AllDataPreloader si disponibles
   List<ExperienceItem>? _getPreloadedData() {
     try {
-      final preloadData = ref.read(preloadControllerProvider);
+      final preloadData = ref.read(allDataPreloaderProvider);
 
-      // Vérifier si preload terminé
-      if (preloadData.state != PreloadState.ready || preloadData.carouselData.isEmpty) {
+      // Vérifier si preload a des données
+      if (preloadData.isEmpty) {
         return null;
       }
 
@@ -233,7 +232,7 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
         carouselKey = '${params.categoryId}_${params.sectionId}';
       }
 
-      final preloadedItems = preloadData.carouselData[carouselKey];
+      final preloadedItems = preloadData[carouselKey];
 
       if (preloadedItems?.isNotEmpty == true) {
         print('🎯 WRAPPER PRELOAD INJECTION: ${widget.title} avec ${preloadedItems!.length} items préchargés');
@@ -247,6 +246,8 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
       return null;
     }
   }
+
+
 
   /// Détermine si les données préchargées sont partielles selon le plan
   bool _isPreloadPartial(List<ExperienceItem> preloadedData) {
