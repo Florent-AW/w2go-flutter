@@ -6,7 +6,7 @@ part of 'all_data_preloader.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$allDataPreloaderHash() => r'c4bacc7d03d77844f9043d0ef1fec6d660e5a428';
+String _$allDataPreloaderHash() => r'043fbd69aecc34d78a29fc10dfd9dd657a524aea';
 
 /// See also [AllDataPreloader].
 @ProviderFor(AllDataPreloader)

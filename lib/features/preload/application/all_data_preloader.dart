@@ -35,12 +35,20 @@ class AllDataPreloader extends _$AllDataPreloader {
   /// Charge exactement 3 items pour TOUS les carrousels (city + categories)
   /// Total: ~35 carrousels × 3 items = 105 items maximum
   Future<void> load3ItemsEverywhere(String cityId) async {
+    print('🎯 PRELOAD START: Méthode appelée pour cityId=$cityId');
+    print('🎯 PRELOAD START: _isLoading avant = $_isLoading');
     if (_isLoading) {
       print('⚠️ PRELOAD: Déjà en cours, ignoré');
       return;
     }
 
+    print('🎯 PRELOAD: Début du chargement...');
     _isLoading = true;
+    print('🎯 PRELOAD: _isLoading mis à true = $_isLoading');
+
+    // Force rebuild HomeShell pour afficher écran bleu
+    state = {...state};
+
     _clearMemoryCache();
     state = {};
 
@@ -65,6 +73,12 @@ class AllDataPreloader extends _$AllDataPreloader {
       state = allData;
       final duration = DateTime.now().difference(startTime);
       print('✅ PRELOAD 3-ITEMS: ${allData.length} carrousels (${duration.inMilliseconds}ms)');
+
+      // ✅ DEBUG : Afficher toutes les clés générées
+      print('🔑 PRELOAD KEYS:');
+      allData.forEach((key, items) {
+        print('  - $key: ${items.length} items');
+      });
 
     } catch (e) {
       print('❌ PRELOAD 3-ITEMS: Timeout ou erreur $e');

@@ -27,32 +27,61 @@ class HomeShell extends ConsumerStatefulWidget {
 // ✅ NOUVEAU
 class _HomeShellState extends ConsumerState<HomeShell> {
   late BottomNavTab _currentTab;
+  bool _hasInitialized = false;
 
   @override
   void initState() {
     super.initState();
     _currentTab = widget.initialTab;
-
-    // ✅ TRIGGER UNIVERSEL SIMPLIFIÉ
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.listen<City?>(selectedCityProvider, (previous, next) {
-        if (next != null && (previous == null || previous.id != next.id)) {
-          print('🌍 TRIGGER UNIVERSEL: Changement de ville ${next.cityName}');
-          ref.read(allDataPreloaderProvider.notifier).load3ItemsEverywhere(next.id);
-        }
-      });
-    });
   }
 
   @override
   Widget build(BuildContext context) {
+    // ✅ CORRECTION : ref.listen dans build avec protection
+    if (!_hasInitialized) {
+      _hasInitialized = true;
+
+      // Déclenchement immédiat si ville déjà sélectionnée
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final currentCity = ref.read(selectedCityProvider);
+        if (currentCity != null) {
+          print('🏙️ INIT: Ville déjà sélectionnée ${currentCity.cityName}, déclenchement preload');
+          try {
+            ref.read(allDataPreloaderProvider.notifier).load3ItemsEverywhere(currentCity.id);
+          } catch (e) {
+            print('❌ INIT: Erreur preload initial $e');
+          }
+        }
+      });
+    }
+
+    // ✅ ref.listen dans build
+    ref.listen<City?>(selectedCityProvider, (previous, next) {
+      print('🔥 HOME SHELL LISTEN: previous=${previous?.cityName}, next=${next?.cityName}');
+
+      if (next != null && (previous == null || previous.id != next.id)) {
+        print('🌍 TRIGGER UNIVERSEL: Déclenchement preload pour ${next.cityName}');
+
+        try {
+          ref.read(allDataPreloaderProvider.notifier).load3ItemsEverywhere(next.id);
+          print('✅ TRIGGER: Preload lancé pour ${next.cityName}');
+        } catch (e) {
+          print('❌ TRIGGER: Erreur preload $e');
+        }
+      }
+    });
+
     // ✅ Écouter le state preload pour rebuild
     final preloadData = ref.watch(allDataPreloaderProvider);
     final isPreloading = ref.watch(allDataPreloaderProvider.notifier).isLoading;
     final selectedCity = ref.watch(selectedCityProvider);
 
+    print('🏠 HOME SHELL BUILD: isPreloading=$isPreloading, city=${selectedCity?.cityName}');
+    print('🏠 HOME SHELL BUILD: preloadData=${preloadData.length} carrousels');
+
     // ✅ LOADING BLOQUANT : Afficher que l'écran bleu si preload en cours
     if (isPreloading && selectedCity != null) {
+      print('🔵 HOME SHELL: Affichage écran bleu pour ${selectedCity.cityName}');
       return Scaffold(
         backgroundColor: Theme.of(context).colorScheme.primary,
         body: Center(
@@ -111,8 +140,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       ),
     );
   }
-
-
 
   /// Retourne la page correspondant au tab
   Widget _getPageForTab(BottomNavTab tab) {

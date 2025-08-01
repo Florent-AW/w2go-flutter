@@ -48,14 +48,13 @@ class CityPicker extends ConsumerWidget {
     );
     if (city is! City) return;
 
-    // ✅ SIMPLE : Met à jour le provider → trigger automatique preload via HomeShell
+    print('🏙️ CITY PICKER: Ville sélectionnée ${city.cityName}');
+
+    // Met à jour le provider → trigger automatique preload via HomeShell
     ref.read(selectedCityProvider.notifier).selectCity(city);
 
-    // ✅ PLUS DE NAVIGATION MANUELLE - HomeShell gère tout
-    print('🏙️ Ville sélectionnée: ${city.cityName} - HomeShell va gérer le preload');
+    print('🏙️ CITY PICKER: Provider mis à jour pour ${city.cityName}');
   }
-
-
 
   String _formatCityName(String? cityName) {
     if (cityName == null) return 'Sélectionnez une ville';
