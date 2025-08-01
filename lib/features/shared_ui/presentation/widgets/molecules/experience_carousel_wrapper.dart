@@ -66,42 +66,27 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
           final controller = ref.read(widget.paginationProvider(widget.providerParams).notifier);
           final currentState = ref.read(widget.paginationProvider(widget.providerParams));
 
-          // ✅ PRIORITÉ 1 : Données préchargées
+          // ✅ PRIORITÉ UNIQUE : Données préchargées seulement
           final preloadedData = _getPreloadedData();
           if (preloadedData?.isNotEmpty == true) {
             print('🚀 WRAPPER PRELOAD INJECTION: ${widget.title} avec ${preloadedData!.length} items');
 
-            // Déterminer si partiel selon le plan différentiel
-            final isPartial = _isPreloadPartial(preloadedData);
-
             controller.state = currentState.copyWith(
               items: preloadedData,
-              isPartial: isPartial,
+              isPartial: true, // Toujours partiel avec 3 items
               currentOffset: preloadedData.length,
               hasMore: true,
               isLoading: false,
             );
-            return; // ✅ SORTIE : Pas besoin de fallback
-          }
-
-          // ✅ PRIORITÉ 2 : Fallback données existantes
-          if (widget.fallbackExperiences?.isNotEmpty == true) {
-            print('🔄 WRAPPER FALLBACK INJECTION: ${widget.title} avec ${widget.fallbackExperiences!.length} items');
-
+          } else {
+            print('⚠️ WRAPPER: Aucune donnée préchargée pour ${widget.title}');
+            // Pas de fallback, pas de loadPreload - juste un état vide
             controller.state = currentState.copyWith(
-              items: widget.fallbackExperiences!,
-              isPartial: widget.fallbackExperiences!.length <= 10,
-              currentOffset: widget.fallbackExperiences!.length,
-              hasMore: true,
+              items: [],
+              isPartial: false,
+              hasMore: false,
               isLoading: false,
             );
-            return; // ✅ SORTIE : Pas besoin de loadPreload
-          }
-
-          // ✅ PRIORITÉ 3 : LoadPreload classique (dernier recours)
-          if (currentState.items.isEmpty && !currentState.isLoading) {
-            print('🚀 WRAPPER PAGINATION INIT: ${widget.title}');
-            controller.loadPreload();
           }
 
         } catch (e) {
@@ -116,38 +101,17 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
     try {
       final paginationState = ref.watch(widget.paginationProvider(widget.providerParams));
 
-      // ✅ T1 AUTOMATIQUE VIA REF.LISTEN (pattern unifié)
-      // ref.listen<PaginationState<ExperienceItem>>(
-      //   widget.paginationProvider(widget.providerParams),
-      //       (previous, next) {
-      //     if (previous != null && !previous.isPartial && next.isPartial) {
-      //       print('🔄 WRAPPER T1 REF.LISTEN: Détection false→true pour ${widget.title}');
-      //
-      //       Future.delayed(const Duration(milliseconds: 1500), () {
-      //         if (mounted) {
-      //           try {
-      //             print('🔄 WRAPPER T1 REF.LISTEN: Complétion pour ${widget.title}');
-      //             ref.read(widget.paginationProvider(widget.providerParams).notifier).completeIfPartial();
-      //           } catch (e) {
-      //             print('❌ WRAPPER T1: Erreur complétion ${widget.title}: $e');
-      //           }
-      //         }
-      //       });
-      //     }
-      //   },
-      // );
-      print('🚫 WRAPPER ref.listen DÉSACTIVÉ temporairement pour Step 1');
+      // ✅ T1 REF.LISTEN DÉSACTIVÉ pour Step 2 (focus preload seulement)
+      print('🚫 WRAPPER ref.listen DÉSACTIVÉ temporairement pour Étape 2');
 
-      // ✅ DONNÉES HYBRIDES : Pagination prioritaire, fallback si nécessaire
-      final experiences = paginationState.items.isNotEmpty
-          ? paginationState.items
-          : widget.fallbackExperiences;
-
+      // ✅ DONNÉES UNIQUES : Pagination state seulement (plus de fallback)
+      final experiences = paginationState.items;
       final isLoading = paginationState.isLoading;
       final errorMessage = paginationState.error;
 
-      // Masquer si aucune donnée
-      if ((experiences?.isEmpty ?? true) && !isLoading) {
+      // Masquer si aucune donnée ET pas de chargement
+      if (experiences.isEmpty && !isLoading) {
+        print('📭 WRAPPER: ${widget.title} masqué (aucune donnée préchargée)');
         return const SizedBox.shrink();
       }
 
@@ -168,20 +132,7 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
       );
     } catch (e) {
       print('❌ WRAPPER BUILD: Erreur ${widget.title}: $e');
-      // Fallback vers les données de secours
-      return Container(
-        padding: EdgeInsets.only(bottom: 4.0),
-        child: GenericExperienceCarousel(
-          key: ValueKey('wrapper_fallback_${widget.heroPrefix}'),
-          title: widget.title,
-          experiences: widget.fallbackExperiences,
-          isLoading: false,
-          heroPrefix: widget.heroPrefix,
-          openBuilder: widget.openBuilder,
-          showDistance: widget.showDistance,
-          onSeeAllPressed: widget.onSeeAllPressed,
-        ),
-      );
+      return const SizedBox.shrink(); // Plus de fallback
     }
   }
 

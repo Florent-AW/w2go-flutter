@@ -7,6 +7,8 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_dimensions.dart';
 import '../../../../../core/theme/components/organisms/app_header.dart';
 import '../../../../../core/domain/models/shared/experience_item.dart';
+import '../../../../core/domain/models/shared/category_model.dart';
+import '../../../../core/domain/models/search/config/section_metadata.dart';
 import '../../../preload/application/pagination_controller.dart';
 import '../../../search/application/state/city_selection_state.dart';
 import '../../../shared_ui/presentation/widgets/organisms/generic_experience_carousel.dart';
@@ -40,8 +42,21 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
 
   @override
   Widget build(BuildContext context) {
-    final experiencesAsync = ref.watch(cityExperiencesControllerProvider(widget.cityId));
+    // ✅ TEMPORAIREMENT DÉSACTIVÉ pour test preload pur
+    // final experiencesAsync = ref.watch(cityExperiencesControllerProvider(widget.cityId));
+
+    // ✅ MODE TEST : Structure minimale pour validation preload
+    final selectedCity = ref.watch(selectedCityProvider);
     final screenWidth = MediaQuery.of(context).size.width;
+
+    if (selectedCity == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // ✅ STRUCTURE TEST avec categories mockées
+    final mockCategories = _createMockCategoriesForTest();
 
     // Utiliser les physics appropriées selon la plateforme
     final scrollPhysics = Theme.of(context).platform == TargetPlatform.iOS
@@ -96,26 +111,18 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
             primary: true,
             physics: scrollPhysics,
             slivers: [
-              // 1. Cover défilable
+              // 1. Cover défilable - ✅ CORRIGÉ : utilise mockCategories
               SliverPersistentHeader(
                 pinned: false, // ✅ Cover défilable
-                delegate: experiencesAsync.when(
-                  data: (categories) => _buildCoverDelegate(context, categories, screenWidth),
-                  loading: () => CityPageCoverDelegateSkeleton(screenWidth: screenWidth),
-                  error: (_, __) => _buildCoverDelegate(context, [], screenWidth),
-                ),
+                delegate: _buildCoverDelegate(context, mockCategories, screenWidth),
               ),
 
               SliverToBoxAdapter(
                 child: SizedBox(height: AppDimensions.spacingM), // ✅ PADDING SOUS COVER
               ),
 
-              // 2. Contenu principal (carrousels)
-              experiencesAsync.when(
-                data: (categories) => _buildCategorySections(context, categories),
-                loading: () => _buildLoadingSections(context),
-                error: (error, stackTrace) => _buildErrorSection(context, error),
-              ),
+              // 2. Contenu principal (carrousels) - ✅ CORRIGÉ : utilise mockCategories
+              _buildCategorySections(context, mockCategories),
 
               // 3. Espacement final
               SliverToBoxAdapter(
@@ -126,6 +133,38 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
         ),
       ),
     );
+  }
+
+  /// ✅ TEMPORAIRE : Categories mockées pour test preload pur
+  List<CategoryExperiences> _createMockCategoriesForTest() {
+    // Structure minimale pour que les wrappers fonctionnent
+    final selectedCity = ref.read(selectedCityProvider);
+    if (selectedCity == null) return [];
+
+    // Mock 7 catégories avec structure basique
+    return [
+      'c3b42899-fdc3-48f7-bd85-09be3381aba9', // Événements
+      'culture-id',
+      'nature-id',
+      'patrimoine-id',
+      'gastronomie-id',
+      'bien-etre-id',
+      'detente-id',
+    ].map((categoryId) => CategoryExperiences(
+      category: Category(id: categoryId, name: 'Test $categoryId'),
+      sections: [
+        SectionExperiences(
+          section: SectionMetadata(
+            id: '5aa09feb-397a-4ad1-8142-7dcf0b2edd0f',
+            title: 'Test $categoryId',
+            sectionType: 'city_featured',
+            priority: 1,
+            categoryId: categoryId,
+          ),
+          experiences: [], // Vide - sera rempli par preload
+        ),
+      ],
+    )).toList();
   }
 
   /// Construit les sections par catégorie avec des données
@@ -219,7 +258,7 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
       openBuilder: widget.openBuilder,
       showDistance: true,
       onSeeAllPressed: () => _onSeeAllPressed(context, categoryExp.category, sectionExp.section),
-      fallbackExperiences: sectionExp.experiences,
+      // ✅ SUPPRIMÉ : fallbackExperiences
     );
   }
 

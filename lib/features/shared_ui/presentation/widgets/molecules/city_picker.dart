@@ -48,13 +48,11 @@ class CityPicker extends ConsumerWidget {
     );
     if (city is! City) return;
 
-    // Met à jour le provider → trigger preload
+    // ✅ SIMPLE : Met à jour le provider → trigger automatique preload via HomeShell
     ref.read(selectedCityProvider.notifier).selectCity(city);
 
-    // Affiche écran loading
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => LoadingScreen(city: city)),
-    );
+    // ✅ PLUS DE NAVIGATION MANUELLE - HomeShell gère tout
+    print('🏙️ Ville sélectionnée: ${city.cityName} - HomeShell va gérer le preload');
   }
 
 

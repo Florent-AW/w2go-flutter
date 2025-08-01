@@ -96,7 +96,7 @@ void main() async {
 
     // ✅ PRELOAD : CityPage + 1 catégorie test
     if (savedCity != null) {
-      await container.read(allDataPreloaderProvider.notifier).loadCompleteCity(savedCity.id);
+      await container.read(allDataPreloaderProvider.notifier).load3ItemsEverywhere(savedCity.id);
       print('✅ STEP 1: Preload terminé pour ${savedCity.id}');
     }
 

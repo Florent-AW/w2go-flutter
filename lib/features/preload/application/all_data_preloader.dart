@@ -1,11 +1,13 @@
 // lib/features/preload/application/all_data_preloader.dart
 
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:flutter/painting.dart';
+
 import '../../../core/domain/models/shared/experience_item.dart';
 import '../../../core/domain/models/shared/city_model.dart';
-import '../../city_page/application/providers/city_experiences_controller.dart';
 import '../../search/application/state/city_selection_state.dart';
 import '../../categories/application/state/categories_provider.dart';
 import '../../categories/application/state/subcategories_provider.dart';
@@ -14,12 +16,10 @@ import '../../search/application/state/event_providers.dart';
 
 part 'all_data_preloader.g.dart';
 
-/// IDs de sections constants pour éviter les magic strings
 class SectionIds {
   static const String featured = 'a62c6046-8814-456f-91ba-b65aa7e73137';
   static const String subcategory = '5aa09feb-397a-4ad1-8142-7dcf0b2edd0f';
-  static const String cityEventsSection = '7f94df23-ab30-4bf3-afb2-59320e5466a7';
-  static const String cityActivitiesSection = '5aa09feb-397a-4ad1-8142-7dcf0b2edd0f';
+  static const String citySection = '5aa09feb-397a-4ad1-8142-7dcf0b2edd0f';
 }
 
 @riverpod
@@ -28,10 +28,13 @@ class AllDataPreloader extends _$AllDataPreloader {
   bool get isLoading => _isLoading;
 
   @override
-  Map<String, List<ExperienceItem>> build() => {};
+  Map<String, List<ExperienceItem>> build() {
+    return {};
+  }
 
-  /// One Shot Loading COMPLET avec protection contre double déclenchement
-  Future<void> loadCompleteCity(String cityId) async {
+  /// Charge exactement 3 items pour TOUS les carrousels (city + categories)
+  /// Total: ~35 carrousels × 3 items = 105 items maximum
+  Future<void> load3ItemsEverywhere(String cityId) async {
     if (_isLoading) {
       print('⚠️ PRELOAD: Déjà en cours, ignoré');
       return;
@@ -39,35 +42,221 @@ class AllDataPreloader extends _$AllDataPreloader {
 
     _isLoading = true;
     _clearMemoryCache();
-    state = {}; // reset précédent
-    print('🚀 PRELOAD ONE SHOT COMPLET: Démarrage pour $cityId');
+    state = {};
+
+    final startTime = DateTime.now();
+    const timeout = Duration(seconds: 10);
+    print('🚀 PRELOAD 3-ITEMS: Démarrage pour $cityId');
 
     try {
       final city = ref.read(selectedCityProvider);
       if (city == null) throw Exception('Aucune ville sélectionnée');
 
-      final results = await Future.wait([
-        _loadCityPageData(cityId),
-        _loadAllCategoriesData(city),
-      ], eagerError: false);
+      final result = await Future.wait([
+        _load3ItemsCityPage(city),
+        _load3ItemsAllCategoryPages(city),
+      ], eagerError: false).timeout(timeout);
 
       final Map<String, List<ExperienceItem>> allData = {};
-      allData.addAll(results[0] ?? {});
-      allData.addAll(results[1] ?? {});
+      for (var data in result) {
+        if (data != null) allData.addAll(data);
+      }
 
       state = allData;
-      print('✅ PRELOAD ONE SHOT COMPLET: ${allData.length} carousels chargés');
+      final duration = DateTime.now().difference(startTime);
+      print('✅ PRELOAD 3-ITEMS: ${allData.length} carrousels (${duration.inMilliseconds}ms)');
 
     } catch (e) {
-      print('❌ PRELOAD ONE SHOT COMPLET: Erreur $e');
-      state = {};
-    } finally {
-      // Force notification pour reconstruire l’UI
+      print('❌ PRELOAD 3-ITEMS: Timeout ou erreur $e');
       state = {...state};
+    } finally {
       _isLoading = false;
     }
   }
 
+  /// Charge CityPage : 1 carrousel × 7 catégories = 7 carrousels
+  Future<Map<String, List<ExperienceItem>>?> _load3ItemsCityPage(City city) async {
+    try {
+      final categories = await ref.read(categoriesProvider.future);
+      final Map<String, List<ExperienceItem>> cityData = {};
+
+      final results = await Future.wait(
+        categories.take(7).map((category) => _load3ItemsCityCarousel(city, category.id)),
+        eagerError: false,
+      );
+
+      for (var data in results) {
+        if (data != null) cityData.addAll(data);
+      }
+
+      print('✅ CityPage: ${cityData.length} carrousels');
+      return cityData;
+    } catch (e) {
+      print('❌ CityPage: Erreur $e');
+      return {};
+    }
+  }
+
+  /// Charge CategoryPages : (1 Featured + 3 Subcategories) × 7 catégories = 28 carrousels
+  Future<Map<String, List<ExperienceItem>>?> _load3ItemsAllCategoryPages(City city) async {
+    try {
+      final categories = await ref.read(categoriesProvider.future);
+      final Map<String, List<ExperienceItem>> categoriesData = {};
+
+      final results = await Future.wait(
+        categories.take(7).map((category) => _load3ItemsCategoryPageCarousels(city, category.id)),
+        eagerError: false,
+      );
+
+      for (var data in results) {
+        if (data != null) categoriesData.addAll(data);
+      }
+
+      print('✅ CategoryPages: ${categoriesData.length} carrousels');
+      return categoriesData;
+    } catch (e) {
+      print('❌ CategoryPages: Erreur $e');
+      return {};
+    }
+  }
+
+  /// Charge 1 carrousel CityPage pour une catégorie
+  /// Clé: categoryId_sectionId
+  Future<Map<String, List<ExperienceItem>>> _load3ItemsCityCarousel(
+      City city,
+      String categoryId
+      ) async {
+    try {
+      final cityData = <String, List<ExperienceItem>>{};
+      const eventsCatId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
+      final isEvents = categoryId == eventsCatId;
+
+      if (isEvents) {
+        final ev = await ref.read(getEventsUseCaseProvider).execute(
+          latitude: city.lat,
+          longitude: city.lon,
+          sectionId: SectionIds.citySection,
+          categoryId: categoryId,
+          limit: 3,
+        );
+        if (ev.isNotEmpty) {
+          final key = '${categoryId}_${SectionIds.citySection}';
+          cityData[key] = ev.map(ExperienceItem.event).toList();
+        }
+      } else {
+        final acts = await ref.read(getActivitiesUseCaseProvider).execute(
+          latitude: city.lat,
+          longitude: city.lon,
+          sectionId: SectionIds.citySection,
+          categoryId: categoryId,
+          limit: 3,
+        );
+        if (acts.isNotEmpty) {
+          final key = '${categoryId}_${SectionIds.citySection}';
+          cityData[key] = acts.map(ExperienceItem.activity).toList();
+        }
+      }
+
+      return cityData;
+    } catch (e) {
+      print('❌ CityCarousel $categoryId: Erreur ignorée $e');
+      return {};
+    }
+  }
+
+  /// Charge 4 carrousels CategoryPage pour une catégorie (1 Featured + 3 Subcategories)
+  /// Clés: categoryId_featuredId, categoryId_subcategoryId_subId
+  Future<Map<String, List<ExperienceItem>>> _load3ItemsCategoryPageCarousels(
+      City city,
+      String categoryId
+      ) async {
+    try {
+      final Map<String, List<ExperienceItem>> categoryData = {};
+
+      // 1. Featured carousel : 3 items
+      final featuredData = await _load3ItemsCategoryFeatured(city, categoryId);
+      if (featuredData.isNotEmpty) {
+        final key = '${categoryId}_${SectionIds.featured}';
+        categoryData[key] = featuredData;
+      }
+
+      // 2. Subcategories carousels : 3 items chacun, max 3 subcategories
+      final subData = await _load3ItemsCategorySubcategories(city, categoryId);
+      categoryData.addAll(subData);
+
+      return categoryData;
+    } catch (e) {
+      print('❌ CategoryPage $categoryId: Erreur ignorée $e');
+      return {};
+    }
+  }
+
+  /// Charge Featured carousel pour une catégorie
+  Future<List<ExperienceItem>> _load3ItemsCategoryFeatured(
+      City city,
+      String categoryId
+      ) async {
+    try {
+      const eventsCatId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
+      final isEvents = categoryId == eventsCatId;
+
+      if (isEvents) {
+        final ev = await ref.read(getEventsUseCaseProvider).execute(
+          latitude: city.lat,
+          longitude: city.lon,
+          sectionId: SectionIds.featured,
+          categoryId: categoryId,
+          limit: 3,
+        );
+        return ev.map(ExperienceItem.event).toList();
+      } else {
+        final acts = await ref.read(getActivitiesUseCaseProvider).execute(
+          latitude: city.lat,
+          longitude: city.lon,
+          sectionId: SectionIds.featured,
+          categoryId: categoryId,
+          limit: 3,
+        );
+        return acts.map(ExperienceItem.activity).toList();
+      }
+    } catch (e) {
+      print('❌ Featured $categoryId: Erreur ignorée $e');
+      return [];
+    }
+  }
+
+  /// Charge Subcategories carousels pour une catégorie (max 3 subcategories)
+  Future<Map<String, List<ExperienceItem>>> _load3ItemsCategorySubcategories(
+      City city,
+      String categoryId
+      ) async {
+    try {
+      final Map<String, List<ExperienceItem>> subData = {};
+      final subs = await ref.read(subCategoriesForCategoryProvider(categoryId).future);
+
+      for (var sub in subs.take(3)) {
+        final acts = await ref.read(getActivitiesUseCaseProvider).execute(
+          latitude: city.lat,
+          longitude: city.lon,
+          sectionId: SectionIds.subcategory,
+          categoryId: categoryId,
+          subcategoryId: sub.id,
+          limit: 3,
+        );
+
+        if (acts.isNotEmpty) {
+          final key = '${categoryId}_${SectionIds.subcategory}_${sub.id}';
+          subData[key] = acts.map(ExperienceItem.activity).toList();
+        }
+      }
+      return subData;
+    } catch (e) {
+      print('❌ Subcategories $categoryId: Erreur ignorée $e');
+      return {};
+    }
+  }
+
+  /// Purge le cache mémoire des images
   void _clearMemoryCache() {
     try {
       PaintingBinding.instance.imageCache.clear();
@@ -76,167 +265,4 @@ class AllDataPreloader extends _$AllDataPreloader {
       print('⚠️ PRELOAD: Erreur purge cache: $e');
     }
   }
-
-  Future<Map<String, List<ExperienceItem>>?> _loadCityPageData(String cityId) async {
-    try {
-      final cityExperiences = await ref.read(cityExperiencesControllerProvider(cityId).future);
-      final Map<String, List<ExperienceItem>> cityData = {};
-
-      for (final categoryExp in cityExperiences) {
-        for (final sectionExp in categoryExp.sections) {
-          // ✅ Clé normalisée : categoryId_sectionId
-          final key = '${categoryExp.category.id}_${sectionExp.section.id}';
-          cityData[key] = sectionExp.experiences;
-        }
-      }
-
-      print('✅ CityPage: ${cityData.length} carousels chargés');
-      return cityData;
-
-    } catch (e) {
-      print('❌ CityPage: Erreur $e');
-      return {};
-    }
-  }
-
-  Future<Map<String, List<ExperienceItem>>?> _loadAllCategoriesData(City city) async {
-    try {
-      // ✅ Récupérer toutes les catégories disponibles
-      final categories = await ref.read(categoriesProvider.future);
-      final Map<String, List<ExperienceItem>> categoriesData = {};
-
-      // ✅ CHARGEMENT PARALLÈLE : Featured pour chaque catégorie
-      final categoryResults = await Future.wait(
-        categories.map((category) => _loadSingleCategoryData(city, category.id)),
-        eagerError: false,
-      );
-
-      // ✅ FUSION des résultats de chaque catégorie
-      for (int i = 0; i < categories.length; i++) {
-        final categoryData = categoryResults[i];
-        if (categoryData != null) {
-          categoriesData.addAll(categoryData);
-        }
-      }
-
-      print('✅ Catégories: ${categoriesData.length} carousels chargés pour ${categories.length} catégories');
-      return categoriesData;
-
-    } catch (e) {
-      print('❌ Catégories: Erreur globale $e');
-      return {};
-    }
-  }
-
-  Future<Map<String, List<ExperienceItem>>?> _loadSingleCategoryData(City city, String categoryId) async {
-    try {
-      final Map<String, List<ExperienceItem>> categoryData = {};
-
-      // ✅ 1. Charger Featured avec clé normalisée
-      final featuredData = await _loadCategoryFeatured(city, categoryId);
-      if (featuredData.isNotEmpty) {
-        final featuredKey = '${categoryId}_${SectionIds.featured}';
-        categoryData[featuredKey] = featuredData;
-      }
-
-      // ✅ 2. Charger première subcategory avec clé normalisée incluant subcategoryId
-      final subcategoryData = await _loadCategorySubcategory(city, categoryId);
-      if (subcategoryData.isNotEmpty) {
-        categoryData.addAll(subcategoryData); // subcategoryData contient déjà les bonnes clés
-      }
-
-      print('✅ Catégorie $categoryId: ${categoryData.length} carousels chargés');
-      return categoryData;
-
-    } catch (e) {
-      print('❌ Catégorie $categoryId: Erreur $e');
-      return {};
-    }
-  }
-
-  Future<List<ExperienceItem>> _loadCategoryFeatured(City city, String categoryId) async {
-    try {
-      const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
-      final isEvents = categoryId == eventsCategoryId;
-
-      if (isEvents) {
-        // ✅ Événements Featured
-        final events = await ref.read(getEventsUseCaseProvider).execute(
-          latitude: city.lat,
-          longitude: city.lon,
-          sectionId: SectionIds.featured,
-          categoryId: categoryId,
-          limit: 8, // Preload optimisé
-        );
-
-        return events.map((event) => ExperienceItem.event(event)).toList();
-      } else {
-        // ✅ Activités Featured
-        final activities = await ref.read(getActivitiesUseCaseProvider).execute(
-          latitude: city.lat,
-          longitude: city.lon,
-          sectionId: SectionIds.featured,
-          categoryId: categoryId,
-          limit: 8, // Preload optimisé
-        );
-
-        return activities.map((activity) => ExperienceItem.activity(activity)).toList();
-      }
-
-    } catch (e) {
-      print('❌ Featured $categoryId: Erreur $e');
-      return [];
-    }
-  }
-
-  Future<Map<String, List<ExperienceItem>>> _loadCategorySubcategory(City city, String categoryId) async {
-    try {
-      final Map<String, List<ExperienceItem>> subcategoryData = {};
-
-      // ✅ Récupérer les 3 premières subcategories disponibles
-      final subcategories = await ref.read(subCategoriesForCategoryProvider(categoryId).future);
-      final subcategoriesToLoad = subcategories.take(3).toList();
-
-      if (subcategoriesToLoad.isEmpty) {
-        return subcategoryData;
-      }
-
-      // ✅ Charger chaque subcategory avec clé unique
-      for (final subcategory in subcategoriesToLoad) {
-        final activities = await ref.read(getActivitiesUseCaseProvider).execute(
-          latitude: city.lat,
-          longitude: city.lon,
-          sectionId: SectionIds.subcategory,
-          categoryId: categoryId,
-          subcategoryId: subcategory.id,
-          limit: 5, // Preload optimisé
-        );
-
-        if (activities.isNotEmpty) {
-          // ✅ Clé unique avec subcategoryId pour éviter les écrasements
-          final subcategoryKey = '${categoryId}_${SectionIds.subcategory}_${subcategory.id}';
-          subcategoryData[subcategoryKey] = activities.map((activity) => ExperienceItem.activity(activity)).toList();
-        }
-      }
-
-      return subcategoryData;
-
-    } catch (e) {
-      print('❌ Subcategory $categoryId: Erreur $e');
-      return {};
-    }
-  }
-
-  /// Charge 3 items pour chaque carrousel (CityPage + featured + subcategories)
-  Future<void> load3ItemsAllCarousels(String cityId) async {
-    await loadCompleteCity(cityId);    // on ré-utilise la logique existante
-    // ↓  ne garder que 3 items par carrousel dans le state
-    final trimmed = <String, List<ExperienceItem>>{};
-    for (final entry in state.entries) {
-      trimmed[entry.key] = entry.value.take(3).toList();
-    }
-    state = trimmed;                   // remplace le cache par la version 3 items
-  }
-
-
 }

@@ -33,12 +33,12 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     super.initState();
     _currentTab = widget.initialTab;
 
-    // ✅ TRIGGER UNIVERSEL : Écouter tous les changements de ville
+    // ✅ TRIGGER UNIVERSEL SIMPLIFIÉ
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.listen<City?>(selectedCityProvider, (previous, next) {
         if (next != null && (previous == null || previous.id != next.id)) {
-          print('🌍 TRIGGER UNIVERSEL: Changement de ville détecté - ${next.cityName}');
-          ref.read(allDataPreloaderProvider.notifier).loadCompleteCity(next.id);
+          print('🌍 TRIGGER UNIVERSEL: Changement de ville ${next.cityName}');
+          ref.read(allDataPreloaderProvider.notifier).load3ItemsEverywhere(next.id);
         }
       });
     });
@@ -46,53 +46,71 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Lecture du flag de chargement et écoute du state pour rebuild
+    // ✅ Écouter le state preload pour rebuild
+    final preloadData = ref.watch(allDataPreloaderProvider);
     final isPreloading = ref.watch(allDataPreloaderProvider.notifier).isLoading;
-    ref.watch(allDataPreloaderProvider); // pour reconstruire quand state change
     final selectedCity = ref.watch(selectedCityProvider);
 
-    return Stack(
-      children: [
-        // Page principale
-        Scaffold(
-          body: PageTransitionSwitcher(
-            duration: const Duration(milliseconds: 200),
-            transitionBuilder: (child, animation, secondaryAnimation) {
-              return SharedAxisTransition(
-                animation: animation,
-                secondaryAnimation: secondaryAnimation,
-                transitionType: SharedAxisTransitionType.horizontal,
-                fillColor: Theme.of(context).colorScheme.background,
-                child: child,
-              );
-            },
-            child: KeyedSubtree(
-              key: ValueKey(_currentTab),
-              child: _getPageForTab(_currentTab),
-            ),
-          ),
-          bottomNavigationBar: GenericBottomBar(
-            selectedTab: _currentTab,
-            onTabSelected: (tab) {
-              if (tab != _currentTab) {
-                setState(() => _currentTab = tab);
-              }
-            },
+    // ✅ LOADING BLOQUANT : Afficher que l'écran bleu si preload en cours
+    if (isPreloading && selectedCity != null) {
+      return Scaffold(
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(color: Colors.white),
+              const SizedBox(height: 16),
+              Text(
+                'Chargement de ${selectedCity.cityName}...',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Préparation des expériences',
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+            ],
           ),
         ),
+      );
+    }
 
-        // Overlay préchargement
-        if (isPreloading && selectedCity != null)
-          Container(
-            color: Theme.of(context).colorScheme.primary,
-            child: const Center(
-              child: CircularProgressIndicator(color: Colors.white),
-            ),
-          ),
-      ],
+    // ✅ PAGES NORMALES : Seulement quand preload terminé
+    return Scaffold(
+      body: PageTransitionSwitcher(
+        duration: const Duration(milliseconds: 200),
+        transitionBuilder: (child, animation, secondaryAnimation) {
+          return SharedAxisTransition(
+            animation: animation,
+            secondaryAnimation: secondaryAnimation,
+            transitionType: SharedAxisTransitionType.horizontal,
+            fillColor: Theme.of(context).colorScheme.background,
+            child: child,
+          );
+        },
+        child: KeyedSubtree(
+          key: ValueKey(_currentTab),
+          child: _getPageForTab(_currentTab),
+        ),
+      ),
+      bottomNavigationBar: GenericBottomBar(
+        selectedTab: _currentTab,
+        onTabSelected: (tab) {
+          if (tab != _currentTab) {
+            setState(() => _currentTab = tab);
+          }
+        },
+      ),
     );
   }
-
 
 
 
