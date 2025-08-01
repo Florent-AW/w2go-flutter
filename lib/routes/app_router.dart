@@ -100,27 +100,26 @@ class AppRouter {
           settings: settings,
         );
 
-    // ✅ NOUVEAU cas pour /loading
-      case '/loading':
-        final Map<String, dynamic> args = settings.arguments as Map<String, dynamic>? ?? {};
-        final city = args['city'];
-        final targetPageType = args['targetPageType'] as String? ?? 'city';
-
-        if (city == null) {
-          // Fallback si pas de ville
-          return MaterialPageRoute(
-            builder: (_) => const WelcomePage(),
-            settings: settings,
-          );
-        }
-
-        return MaterialPageRoute(
-          builder: (_) => LoadingRoute(
-            targetCity: city,
-            targetPageType: targetPageType,
-          ),
-          settings: settings,
-        );
+      // ❌ DÉSACTIVÉ : Ancien système LoadingRoute
+      // case '/loading':
+      //   final Map args = settings.arguments as Map? ?? {};
+      //   final city = args['city'];
+      //   final targetPageType = args['targetPageType'] as String? ?? 'city';
+      //
+      //   if (city == null) {
+      //     return MaterialPageRoute(
+      //       builder: (_) => const WelcomePage(),
+      //       settings: settings,
+      //     );
+      //   }
+      //
+      //   return MaterialPageRoute(
+      //     builder: (_) => LoadingRoute(
+      //       targetCity: city,
+      //       targetPageType: targetPageType,
+      //     ),
+      //     settings: settings,
+      //   );
 
       default:
       // Gestion des routes avec ID de catégorie

@@ -2,11 +2,16 @@
 
 import 'package:flutter/material.dart';
 import 'package:animations/animations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../categories/presentation/pages/category_page.dart';
 import '../../../city_page/presentation/pages/city_page.dart';
 import '../../../shared_ui/presentation/widgets/organisms/generic_bottom_bar.dart';
+import '../../../search/application/state/city_selection_state.dart';
+import '../../../../core/application/all_data_preloader.dart';
+import '../../../../core/domain/models/shared/city_model.dart';
 
-class HomeShell extends StatefulWidget {
+
+class HomeShell extends ConsumerStatefulWidget {
   /// Tab initial à afficher
   final BottomNavTab initialTab;
 
@@ -16,16 +21,29 @@ class HomeShell extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<HomeShell> createState() => _HomeShellState();
+  ConsumerState<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+// ✅ NOUVEAU
+class _HomeShellState extends ConsumerState<HomeShell> {
   late BottomNavTab _currentTab;
 
   @override
   void initState() {
     super.initState();
     _currentTab = widget.initialTab;
+
+    // ✅ TRIGGER UNIVERSEL : Écouter les changements de ville
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.listen<City?>(selectedCityProvider, (previous, next) { // ✅ Typage explicite
+        if (next != null && previous?.id != next.id) {
+          print('🌍 TRIGGER UNIVERSEL: Changement de ville détecté - ${next.cityName}');
+
+          // ✅ Déclencher le preload complet
+          ref.read(allDataPreloaderProvider.notifier).loadCompleteCity(next.id);
+        }
+      });
+    });
   }
 
   /// Retourne la page correspondant au tab
