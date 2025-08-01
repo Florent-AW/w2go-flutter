@@ -1,16 +1,16 @@
-// lib/core/application/all_data_preloader.dart
+// lib/features/preload/application/all_data_preloader.dart
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:flutter/painting.dart';
-import '../domain/models/shared/experience_item.dart';
-import '../domain/models/shared/city_model.dart';
-import '../../features/city_page/application/providers/city_experiences_controller.dart';
-import '../../features/search/application/state/city_selection_state.dart';
-import '../../features/categories/application/state/categories_provider.dart';
-import '../../features/categories/application/state/subcategories_provider.dart';
-import '../../features/search/application/state/activity_providers.dart';
-import '../../features/search/application/state/event_providers.dart';
+import '../../../core/domain/models/shared/experience_item.dart';
+import '../../../core/domain/models/shared/city_model.dart';
+import '../../city_page/application/providers/city_experiences_controller.dart';
+import '../../search/application/state/city_selection_state.dart';
+import '../../categories/application/state/categories_provider.dart';
+import '../../categories/application/state/subcategories_provider.dart';
+import '../../search/application/state/activity_providers.dart';
+import '../../search/application/state/event_providers.dart';
 
 part 'all_data_preloader.g.dart';
 
@@ -226,4 +226,17 @@ class AllDataPreloader extends _$AllDataPreloader {
       return {};
     }
   }
+
+  /// Charge 3 items pour chaque carrousel (CityPage + featured + subcategories)
+  Future<void> load3ItemsAllCarousels(String cityId) async {
+    await loadCompleteCity(cityId);    // on ré-utilise la logique existante
+    // ↓  ne garder que 3 items par carrousel dans le state
+    final trimmed = <String, List<ExperienceItem>>{};
+    for (final entry in state.entries) {
+      trimmed[entry.key] = entry.value.take(3).toList();
+    }
+    state = trimmed;                   // remplace le cache par la version 3 items
+  }
+
+
 }

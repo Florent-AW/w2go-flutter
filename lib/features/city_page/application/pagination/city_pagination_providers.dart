@@ -1,7 +1,7 @@
 //lib/features/city_page/application/pagination/city_pagination_providers.dart
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/application/pagination_controller.dart';
+import '../../../preload/application/pagination_controller.dart';
 import '../../../../core/domain/models/shared/experience_item.dart';
 import '../../../../core/domain/models/shared/city_model.dart';
 import '../../../search/application/state/city_selection_state.dart';

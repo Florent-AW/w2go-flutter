@@ -1,7 +1,7 @@
 // lib/features/categories/application/pagination/category_pagination_providers.dart
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/application/pagination_controller.dart';
+import '../../../preload/application/pagination_controller.dart';
 import '../../../../core/domain/pagination/paginated_data_provider.dart';
 import '../../../../core/domain/pagination/paginated_result.dart';
 import '../../../../core/domain/models/shared/experience_item.dart';

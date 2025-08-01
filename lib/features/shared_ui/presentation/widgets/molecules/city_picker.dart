@@ -8,6 +8,8 @@ import '../../../../../core/theme/app_dimensions.dart';
 import '../../../../../core/domain/models/shared/city_model.dart';
 import '../../../../search/application/state/city_selection_state.dart';
 import '../../../../search/application/state/place_details_notifier.dart';
+import '../../../../preload/presentation/loading_screen.dart';
+
 import '../../pages/city_picker_page.dart';
 
 /// Sélecteur de ville réutilisable
@@ -40,34 +42,22 @@ class CityPicker extends ConsumerWidget {
   });
 
   void _showCityPicker(BuildContext context, WidgetRef ref) async {
-    // Réinitialiser l'état du détail de lieu
-    ref.read(placeDetailsNotifierProvider.notifier).reset();
-
-    // Ouvrir CityPickerPage
+    // Sélection de ville
     final city = await Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (context) => const CityPickerPage(),
-      ),
+      MaterialPageRoute(builder: (_) => const CityPickerPage()),
     );
+    if (city is! City) return;
 
-    // Vérifier si une ville a été sélectionnée
-    if (city != null && city is City) {
-      print('🎯 CITY PICKER: Ville sélectionnée: ${city.cityName}');
+    // Met à jour le provider → trigger preload
+    ref.read(selectedCityProvider.notifier).selectCity(city);
 
-      // ✅ NOUVEAU SYSTÈME : Mettre à jour le provider (déclenche le trigger universel)
-      ref.read(selectedCityProvider.notifier).selectCity(city);
-
-      // ✅ Navigation directe selon le contexte
-      final targetPageType = this.targetPageType ?? 'category'; // Fallback par défaut
-
-      if (targetPageType == 'city') {
-        Navigator.of(context).pushReplacementNamed('/city');
-      } else {
-        Navigator.of(context).pushReplacementNamed('/category');
-      }
-    }
+    // Affiche écran loading
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => LoadingScreen(city: city)),
+    );
   }
+
+
 
   String _formatCityName(String? cityName) {
     if (cityName == null) return 'Sélectionnez une ville';

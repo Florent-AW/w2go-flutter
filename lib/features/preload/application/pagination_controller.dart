@@ -1,9 +1,9 @@
-// lib/core/application/pagination_controller.dart
+// lib/features/preload/application/pagination_controller.dart
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import '../domain/pagination/paginated_data_provider.dart';
-import '../domain/pagination/paginated_result.dart';
+import '../../../core/domain/pagination/paginated_data_provider.dart';
+import '../../../core/domain/pagination/paginated_result.dart';
 
 part 'pagination_controller.freezed.dart';
 
@@ -68,6 +68,9 @@ class PaginationController<T> extends StateNotifier<PaginationState<T>> {
 
   /// Charge la première page avec taille preload (T0)
   Future<void> loadPreload() async {
+    // ✅ Protection contre l'utilisation après dispose
+    if (mounted == false) return;
+
     if (state.isLoading) return;
 
     state = state.copyWith(isLoading: true, error: null);
@@ -77,6 +80,9 @@ class PaginationController<T> extends StateNotifier<PaginationState<T>> {
         offset: 0,
         limit: _provider.preloadPageSize,
       );
+
+      // ✅ Vérifier à nouveau si toujours monté avant de modifier le state
+      if (mounted == false) return;
 
       state = state.copyWith(
         isLoading: false,
@@ -89,6 +95,9 @@ class PaginationController<T> extends StateNotifier<PaginationState<T>> {
       print('✅ PAGINATION PRELOAD: ${_provider.providerId} → ${result.items.length} items (preload)');
 
     } catch (e) {
+      // ✅ Vérifier à nouveau si toujours monté avant de modifier le state
+      if (mounted == false) return;
+
       state = state.copyWith(
         isLoading: false,
         error: e.toString(),

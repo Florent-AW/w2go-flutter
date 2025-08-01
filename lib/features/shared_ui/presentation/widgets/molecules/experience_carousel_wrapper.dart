@@ -2,9 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../../core/application/pagination_controller.dart';
+import '../../../../preload/application/pagination_controller.dart';
 import '../../../../../core/domain/models/shared/experience_item.dart';
-import '../../../../../core/application/all_data_preloader.dart';
+import '../../../../preload/application/all_data_preloader.dart';
 import '../organisms/generic_experience_carousel.dart';
 
 /// Wrapper stateful unifié pour tous les carrousels avec pagination

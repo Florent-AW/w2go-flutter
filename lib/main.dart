@@ -21,7 +21,7 @@ import 'core/adapters/cache/hive_recent_cities_adapter.dart';
 import 'core/adapters/supabase/search/suggested_cities_adapter.dart';
 import 'core/domain/ports/providers/search/recent_cities_provider.dart';
 import 'core/domain/ports/providers/search/suggested_cities_provider.dart';
-import 'core/application/all_data_preloader.dart';
+import 'features/preload/application/all_data_preloader.dart';
 import '../core/adapters/cache/hive_location_cache_adapter.dart';
 
 import 'routes/app_router.dart';
