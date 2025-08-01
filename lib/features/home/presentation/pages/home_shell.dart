@@ -27,6 +27,7 @@ class HomeShell extends ConsumerStatefulWidget {
 // ✅ NOUVEAU
 class _HomeShellState extends ConsumerState<HomeShell> {
   late BottomNavTab _currentTab;
+  bool _hasTriggeredInitial = false;
 
   @override
   void initState() {
@@ -35,16 +36,80 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
     // ✅ TRIGGER UNIVERSEL : Écouter les changements de ville
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.listen<City?>(selectedCityProvider, (previous, next) { // ✅ Typage explicite
+      ref.listen<City?>(selectedCityProvider, (previous, next) {
         if (next != null && previous?.id != next.id) {
           print('🌍 TRIGGER UNIVERSEL: Changement de ville détecté - ${next.cityName}');
-
-          // ✅ Déclencher le preload complet
           ref.read(allDataPreloaderProvider.notifier).loadCompleteCity(next.id);
         }
       });
     });
   }
+
+  @override
+  Widget build(BuildContext context) {
+    // ✅ TRIGGER INITIAL : Vérifier si preload nécessaire au premier build (une seule fois)
+    if (!_hasTriggeredInitial) {
+      final selectedCity = ref.watch(selectedCityProvider);
+      final preloadData = ref.watch(allDataPreloaderProvider);
+
+      // Si ville sélectionnée mais pas de données preload → déclencher
+      if (selectedCity != null && preloadData.isEmpty) {
+        _hasTriggeredInitial = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          print('🌍 TRIGGER INITIAL: Ville détectée sans preload - ${selectedCity.cityName}');
+          ref.read(allDataPreloaderProvider.notifier).loadCompleteCity(selectedCity.id);
+        });
+      }
+    }
+
+    // ✅ État de chargement global
+    final isPreloading = ref.watch(allDataPreloaderProvider.notifier).isLoading;
+    final selectedCity = ref.watch(selectedCityProvider);
+
+    return Stack(
+      children: [
+        // Page principale avec navigation par onglets
+        Scaffold(
+          body: PageTransitionSwitcher(
+            duration: const Duration(milliseconds: 200),
+            transitionBuilder: (child, animation, secondaryAnimation) {
+              return SharedAxisTransition(
+                animation: animation,
+                secondaryAnimation: secondaryAnimation,
+                transitionType: SharedAxisTransitionType.horizontal,
+                fillColor: Theme.of(context).colorScheme.background,
+                child: child,
+              );
+            },
+            child: KeyedSubtree(
+              key: ValueKey(_currentTab),
+              child: _getPageForTab(_currentTab),
+            ),
+          ),
+          bottomNavigationBar: GenericBottomBar(
+            selectedTab: _currentTab,
+            onTabSelected: (tab) {
+              if (tab != _currentTab) {
+                setState(() {
+                  _currentTab = tab;
+                });
+              }
+            },
+          ),
+        ),
+
+        // ✅ Overlay préchargement : écran bleu + spinner
+        if (isPreloading && selectedCity != null)
+          Container(
+            color: Theme.of(context).colorScheme.primary,
+            child: const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            ),
+          ),
+      ],
+    );
+  }
+
 
   /// Retourne la page correspondant au tab
   Widget _getPageForTab(BottomNavTab tab) {
@@ -62,42 +127,5 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           body: Center(child: Text('🚧 Profil - À implémenter')),
         );
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      // ✅ PAS de AppBar ici - chaque page gère son header
-
-      // ✅ Body qui commute avec transition subtile
-      body: PageTransitionSwitcher(
-        duration: const Duration(milliseconds: 200), // ✅ Très rapide
-        transitionBuilder: (child, animation, secondaryAnimation) {
-          return SharedAxisTransition(
-            animation: animation,
-            secondaryAnimation: secondaryAnimation,
-            transitionType: SharedAxisTransitionType.horizontal,
-            fillColor: Theme.of(context).colorScheme.background,
-            child: child,
-          );
-        },
-        child: KeyedSubtree(
-          key: ValueKey(_currentTab), // ✅ Conserve l'état de chaque page
-          child: _getPageForTab(_currentTab),
-        ),
-      ),
-
-      // ✅ Bottom Bar fixe avec callback
-      bottomNavigationBar: GenericBottomBar(
-        selectedTab: _currentTab,
-        onTabSelected: (tab) {
-          if (tab != _currentTab) {
-            setState(() {
-              _currentTab = tab;
-            });
-          }
-        },
-      ),
-    );
   }
 }

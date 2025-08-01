@@ -2,6 +2,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter/painting.dart';
 import '../domain/models/shared/experience_item.dart';
 import '../domain/models/shared/city_model.dart';
 import '../../features/city_page/application/providers/city_experiences_controller.dart';
@@ -13,14 +14,34 @@ import '../../features/search/application/state/event_providers.dart';
 
 part 'all_data_preloader.g.dart';
 
+/// IDs de sections constants pour éviter les magic strings
+class SectionIds {
+  static const String featured = 'a62c6046-8814-456f-91ba-b65aa7e73137';
+  static const String subcategory = '5aa09feb-397a-4ad1-8142-7dcf0b2edd0f';
+  static const String cityEventsSection = '7f94df23-ab30-4bf3-afb2-59320e5466a7';
+  static const String cityActivitiesSection = '5aa09feb-397a-4ad1-8142-7dcf0b2edd0f';
+}
 
 @riverpod
 class AllDataPreloader extends _$AllDataPreloader {
+  bool _isLoading = false;
+  bool get isLoading => _isLoading;
+
   @override
   Map<String, List<ExperienceItem>> build() => {};
 
-  /// One Shot Loading COMPLET : Charge CityPage + TOUTES les catégories
+  /// One Shot Loading COMPLET avec protection contre double déclenchement
   Future<void> loadCompleteCity(String cityId) async {
+    // ✅ Protection contre double déclenchement
+    if (_isLoading) {
+      print('⚠️ PRELOAD: Déjà en cours, ignoré');
+      return;
+    }
+
+    _isLoading = true;
+    // ✅ Purge mémoire avant nouveau chargement
+    _clearMemoryCache();
+    state = {}; // reset précédent
     print('🚀 PRELOAD ONE SHOT COMPLET: Démarrage pour $cityId');
 
     try {
@@ -44,16 +65,28 @@ class AllDataPreloader extends _$AllDataPreloader {
     } catch (e) {
       print('❌ PRELOAD ONE SHOT COMPLET: Erreur $e');
       state = {};
+    } finally {
+      _isLoading = false;
+    }
+  }
+
+  void _clearMemoryCache() {
+    try {
+      PaintingBinding.instance.imageCache.clear();
+      print('🧹 PRELOAD: Cache mémoire purgé');
+    } catch (e) {
+      print('⚠️ PRELOAD: Erreur purge cache: $e');
     }
   }
 
   Future<Map<String, List<ExperienceItem>>?> _loadCityPageData(String cityId) async {
     try {
       final cityExperiences = await ref.read(cityExperiencesControllerProvider(cityId).future);
-
       final Map<String, List<ExperienceItem>> cityData = {};
+
       for (final categoryExp in cityExperiences) {
         for (final sectionExp in categoryExp.sections) {
+          // ✅ Clé normalisée : categoryId_sectionId
           final key = '${categoryExp.category.id}_${sectionExp.section.id}';
           cityData[key] = sectionExp.experiences;
         }
@@ -61,6 +94,7 @@ class AllDataPreloader extends _$AllDataPreloader {
 
       print('✅ CityPage: ${cityData.length} carousels chargés');
       return cityData;
+
     } catch (e) {
       print('❌ CityPage: Erreur $e');
       return {};
@@ -100,16 +134,17 @@ class AllDataPreloader extends _$AllDataPreloader {
     try {
       final Map<String, List<ExperienceItem>> categoryData = {};
 
-      // ✅ 1. Charger Featured avec use case direct
+      // ✅ 1. Charger Featured avec clé normalisée
       final featuredData = await _loadCategoryFeatured(city, categoryId);
       if (featuredData.isNotEmpty) {
-        categoryData['${categoryId}_featured'] = featuredData;
+        final featuredKey = '${categoryId}_${SectionIds.featured}';
+        categoryData[featuredKey] = featuredData;
       }
 
-      // ✅ 2. Charger première subcategory avec use case direct
+      // ✅ 2. Charger première subcategory avec clé normalisée incluant subcategoryId
       final subcategoryData = await _loadCategorySubcategory(city, categoryId);
       if (subcategoryData.isNotEmpty) {
-        categoryData['${categoryId}_subcategory'] = subcategoryData;
+        categoryData.addAll(subcategoryData); // subcategoryData contient déjà les bonnes clés
       }
 
       print('✅ Catégorie $categoryId: ${categoryData.length} carousels chargés');
@@ -124,7 +159,6 @@ class AllDataPreloader extends _$AllDataPreloader {
   Future<List<ExperienceItem>> _loadCategoryFeatured(City city, String categoryId) async {
     try {
       const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
-      const String featuredSectionId = 'a62c6046-8814-456f-91ba-b65aa7e73137';
       final isEvents = categoryId == eventsCategoryId;
 
       if (isEvents) {
@@ -132,7 +166,7 @@ class AllDataPreloader extends _$AllDataPreloader {
         final events = await ref.read(getEventsUseCaseProvider).execute(
           latitude: city.lat,
           longitude: city.lon,
-          sectionId: featuredSectionId,
+          sectionId: SectionIds.featured,
           categoryId: categoryId,
           limit: 8, // Preload optimisé
         );
@@ -143,7 +177,7 @@ class AllDataPreloader extends _$AllDataPreloader {
         final activities = await ref.read(getActivitiesUseCaseProvider).execute(
           latitude: city.lat,
           longitude: city.lon,
-          sectionId: featuredSectionId,
+          sectionId: SectionIds.featured,
           categoryId: categoryId,
           limit: 8, // Preload optimisé
         );
@@ -157,35 +191,41 @@ class AllDataPreloader extends _$AllDataPreloader {
     }
   }
 
-  Future<List<ExperienceItem>> _loadCategorySubcategory(City city, String categoryId) async {
+  Future<Map<String, List<ExperienceItem>>> _loadCategorySubcategory(City city, String categoryId) async {
     try {
-      // ✅ Récupérer première subcategory disponible
-      final subcategories = await ref.read(subCategoriesForCategoryProvider(categoryId).future);
+      final Map<String, List<ExperienceItem>> subcategoryData = {};
 
-      if (subcategories.isEmpty) {
-        return [];
+      // ✅ Récupérer les 3 premières subcategories disponibles
+      final subcategories = await ref.read(subCategoriesForCategoryProvider(categoryId).future);
+      final subcategoriesToLoad = subcategories.take(3).toList();
+
+      if (subcategoriesToLoad.isEmpty) {
+        return subcategoryData;
       }
 
-      final firstSubcategory = subcategories.first;
-      const String subcategorySectionId = '5aa09feb-397a-4ad1-8142-7dcf0b2edd0f';
+      // ✅ Charger chaque subcategory avec clé unique
+      for (final subcategory in subcategoriesToLoad) {
+        final activities = await ref.read(getActivitiesUseCaseProvider).execute(
+          latitude: city.lat,
+          longitude: city.lon,
+          sectionId: SectionIds.subcategory,
+          categoryId: categoryId,
+          subcategoryId: subcategory.id,
+          limit: 5, // Preload optimisé
+        );
 
-      // ✅ Charger activités de la première subcategory
-      final activities = await ref.read(getActivitiesUseCaseProvider).execute(
-        latitude: city.lat,
-        longitude: city.lon,
-        sectionId: subcategorySectionId,
-        categoryId: categoryId,
-        subcategoryId: firstSubcategory.id,
-        limit: 5, // Preload optimisé
-      );
+        if (activities.isNotEmpty) {
+          // ✅ Clé unique avec subcategoryId pour éviter les écrasements
+          final subcategoryKey = '${categoryId}_${SectionIds.subcategory}_${subcategory.id}';
+          subcategoryData[subcategoryKey] = activities.map((activity) => ExperienceItem.activity(activity)).toList();
+        }
+      }
 
-      return activities.map((activity) => ExperienceItem.activity(activity)).toList();
+      return subcategoryData;
 
     } catch (e) {
       print('❌ Subcategory $categoryId: Erreur $e');
-      return [];
+      return {};
     }
   }
-
-
 }

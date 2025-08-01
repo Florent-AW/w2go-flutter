@@ -218,16 +218,23 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
         return null;
       }
 
-      // Construire la clé selon le type de provider
+      // ✅ Construire la clé selon le type de provider et paramètres
       String carouselKey;
 
-      // Pour CityPage : categoryId_sectionId
-      if (widget.paginationProvider.toString().contains('cityActivitiesPagination')) {
-        final params = widget.providerParams as dynamic; // CityCarouselParams ou CategoryCarouselParams
+      if (widget.paginationProvider.toString().contains('cityActivities')) {
+        // ✅ CityPage : categoryId_sectionId (format direct)
+        final params = widget.providerParams as dynamic;
         carouselKey = '${params.categoryId}_${params.sectionId}';
-      }
-      // Pour CategoryPage : categoryId_sectionId (même format)
-      else {
+      } else if (widget.paginationProvider.toString().contains('categoryFeatured')) {
+        // ✅ CategoryPage Featured : categoryId_featuredSectionId
+        final params = widget.providerParams as dynamic;
+        carouselKey = '${params.categoryId}_a62c6046-8814-456f-91ba-b65aa7e73137';
+      } else if (widget.paginationProvider.toString().contains('categorySubcategory')) {
+        // ✅ CategoryPage Subcategory : categoryId_subcategorySectionId_subcategoryId
+        final params = widget.providerParams as dynamic;
+        carouselKey = '${params.categoryId}_5aa09feb-397a-4ad1-8142-7dcf0b2edd0f_${params.subcategoryId}';
+      } else {
+        // ✅ Fallback générique
         final params = widget.providerParams as dynamic;
         carouselKey = '${params.categoryId}_${params.sectionId}';
       }
@@ -246,6 +253,7 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
       return null;
     }
   }
+
 
 
 
