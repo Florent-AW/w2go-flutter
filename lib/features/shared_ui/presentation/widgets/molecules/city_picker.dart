@@ -8,7 +8,6 @@ import '../../../../../core/theme/app_dimensions.dart';
 import '../../../../../core/domain/models/shared/city_model.dart';
 import '../../../../search/application/state/city_selection_state.dart';
 import '../../../../search/application/state/place_details_notifier.dart';
-import '../../../../preload/application/target_page_service.dart';
 import '../../pages/city_picker_page.dart';
 
 /// Sélecteur de ville réutilisable
@@ -46,31 +45,27 @@ class CityPicker extends ConsumerWidget {
 
     // Ouvrir CityPickerPage
     final city = await Navigator.of(context).push(
-        MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (context) => const CityPickerPage(),
-        )
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (context) => const CityPickerPage(),
+      ),
     );
 
     // Vérifier si une ville a été sélectionnée
     if (city != null && city is City) {
-      // ✅ Détecter le type de page cible
-      final targetPageType =
-          this.targetPageType ?? TargetPageService.determineTargetPageType(context);
+      print('🎯 CITY PICKER: Ville sélectionnée: ${city.cityName}');
 
-      print('🎯 CITY PICKER: Ville sélectionnée: ${city.cityName}, target: $targetPageType');
-
-      // ✅ CORRECTION: Utiliser Navigator.pushNamed au lieu de context.go
-      Navigator.of(context).pushNamed(
-        '/loading',
-        arguments: {
-          'city': city,
-          'targetPageType': targetPageType,
-        },
-      );
-
-      // Mettre à jour le provider (pour les autres widgets)
+      // ✅ NOUVEAU SYSTÈME : Mettre à jour le provider (déclenche le trigger universel)
       ref.read(selectedCityProvider.notifier).selectCity(city);
+
+      // ✅ Navigation directe selon le contexte
+      final targetPageType = this.targetPageType ?? 'category'; // Fallback par défaut
+
+      if (targetPageType == 'city') {
+        Navigator.of(context).pushReplacementNamed('/city');
+      } else {
+        Navigator.of(context).pushReplacementNamed('/category');
+      }
     }
   }
 
