@@ -27,17 +27,16 @@ class HomeShell extends ConsumerStatefulWidget {
 // ✅ NOUVEAU
 class _HomeShellState extends ConsumerState<HomeShell> {
   late BottomNavTab _currentTab;
-  bool _hasTriggeredInitial = false;
 
   @override
   void initState() {
     super.initState();
     _currentTab = widget.initialTab;
 
-    // ✅ TRIGGER UNIVERSEL : Écouter les changements de ville
+    // ✅ TRIGGER UNIVERSEL : Écouter tous les changements de ville
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.listen<City?>(selectedCityProvider, (previous, next) {
-        if (next != null && previous?.id != next.id) {
+        if (next != null && (previous == null || previous.id != next.id)) {
           print('🌍 TRIGGER UNIVERSEL: Changement de ville détecté - ${next.cityName}');
           ref.read(allDataPreloaderProvider.notifier).loadCompleteCity(next.id);
         }
@@ -47,28 +46,14 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ TRIGGER INITIAL : Vérifier si preload nécessaire au premier build (une seule fois)
-    if (!_hasTriggeredInitial) {
-      final selectedCity = ref.watch(selectedCityProvider);
-      final preloadData = ref.watch(allDataPreloaderProvider);
-
-      // Si ville sélectionnée mais pas de données preload → déclencher
-      if (selectedCity != null && preloadData.isEmpty) {
-        _hasTriggeredInitial = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          print('🌍 TRIGGER INITIAL: Ville détectée sans preload - ${selectedCity.cityName}');
-          ref.read(allDataPreloaderProvider.notifier).loadCompleteCity(selectedCity.id);
-        });
-      }
-    }
-
-    // ✅ État de chargement global
+    // ✅ Lecture du flag de chargement et écoute du state pour rebuild
     final isPreloading = ref.watch(allDataPreloaderProvider.notifier).isLoading;
+    ref.watch(allDataPreloaderProvider); // pour reconstruire quand state change
     final selectedCity = ref.watch(selectedCityProvider);
 
     return Stack(
       children: [
-        // Page principale avec navigation par onglets
+        // Page principale
         Scaffold(
           body: PageTransitionSwitcher(
             duration: const Duration(milliseconds: 200),
@@ -90,15 +75,13 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             selectedTab: _currentTab,
             onTabSelected: (tab) {
               if (tab != _currentTab) {
-                setState(() {
-                  _currentTab = tab;
-                });
+                setState(() => _currentTab = tab);
               }
             },
           ),
         ),
 
-        // ✅ Overlay préchargement : écran bleu + spinner
+        // Overlay préchargement
         if (isPreloading && selectedCity != null)
           Container(
             color: Theme.of(context).colorScheme.primary,
@@ -109,6 +92,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       ],
     );
   }
+
+
 
 
   /// Retourne la page correspondant au tab

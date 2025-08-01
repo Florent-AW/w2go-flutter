@@ -32,14 +32,12 @@ class AllDataPreloader extends _$AllDataPreloader {
 
   /// One Shot Loading COMPLET avec protection contre double déclenchement
   Future<void> loadCompleteCity(String cityId) async {
-    // ✅ Protection contre double déclenchement
     if (_isLoading) {
       print('⚠️ PRELOAD: Déjà en cours, ignoré');
       return;
     }
 
     _isLoading = true;
-    // ✅ Purge mémoire avant nouveau chargement
     _clearMemoryCache();
     state = {}; // reset précédent
     print('🚀 PRELOAD ONE SHOT COMPLET: Démarrage pour $cityId');
@@ -48,13 +46,11 @@ class AllDataPreloader extends _$AllDataPreloader {
       final city = ref.read(selectedCityProvider);
       if (city == null) throw Exception('Aucune ville sélectionnée');
 
-      // ✅ CHARGEMENT PARALLÈLE : CityPage + toutes les catégories
       final results = await Future.wait([
         _loadCityPageData(cityId),
         _loadAllCategoriesData(city),
       ], eagerError: false);
 
-      // ✅ FUSION des données
       final Map<String, List<ExperienceItem>> allData = {};
       allData.addAll(results[0] ?? {});
       allData.addAll(results[1] ?? {});
@@ -66,6 +62,8 @@ class AllDataPreloader extends _$AllDataPreloader {
       print('❌ PRELOAD ONE SHOT COMPLET: Erreur $e');
       state = {};
     } finally {
+      // Force notification pour reconstruire l’UI
+      state = {...state};
       _isLoading = false;
     }
   }
