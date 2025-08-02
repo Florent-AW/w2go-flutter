@@ -160,49 +160,48 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
   }
 
   /// Récupère les données préchargées depuis AllDataPreloader si disponibles
-  List<ExperienceItem>? _getPreloadedData() {
+  List? _getPreloadedData() {
     try {
       final preloadData = ref.read(allDataPreloaderProvider);
+      if (preloadData.isEmpty) return null;
 
-      // Vérifier si preload a des données
-      if (preloadData.isEmpty) {
-        return null;
-      }
-
-      // ✅ Construire la clé selon le type de provider et paramètres
       String carouselKey;
+      final providerName = widget.paginationProvider.toString();
 
-      if (widget.paginationProvider.toString().contains('cityActivities')) {
-        // ✅ CityPage : categoryId_sectionId (format direct)
+      if (providerName.contains('cityActivities')) {
+        // CityPage : categoryId_sectionId
         final params = widget.providerParams as dynamic;
         carouselKey = '${params.categoryId}_${params.sectionId}';
-      } else if (widget.paginationProvider.toString().contains('categoryFeatured')) {
-        // ✅ CategoryPage Featured : categoryId_featuredSectionId
+      } else if (providerName.contains('categoryFeatured')) {
+        // CategoryPage Featured : categoryId_sectionId (dynamique)
         final params = widget.providerParams as dynamic;
-        carouselKey = '${params.categoryId}_a62c6046-8814-456f-91ba-b65aa7e73137';
-      } else if (widget.paginationProvider.toString().contains('categorySubcategory')) {
-        // ✅ CategoryPage Subcategory : categoryId_subcategorySectionId_subcategoryId
+        carouselKey = '${params.categoryId}_${params.sectionId}';
+      } else if (providerName.contains('categorySubcategory')) {
+        // CategoryPage Subcategory : categoryId_sectionId_subcategoryId
         final params = widget.providerParams as dynamic;
-        carouselKey = '${params.categoryId}_5aa09feb-397a-4ad1-8142-7dcf0b2edd0f_${params.subcategoryId}';
+        carouselKey =
+        '${params.categoryId}_${params.sectionId}_${params.subcategoryId}';
       } else {
-        // ✅ Fallback générique
+        // Fallback générique
         final params = widget.providerParams as dynamic;
         carouselKey = '${params.categoryId}_${params.sectionId}';
       }
 
-      final preloadedItems = preloadData[carouselKey];
+      final preloadedItemsRaw = preloadData[carouselKey];
+      if (preloadedItemsRaw?.isNotEmpty == true) {
+        // Conversion explicite en List<ExperienceItem>
+        final rawList = preloadedItemsRaw as List;
+        final preloadedItems =
+        rawList.map((e) => e as ExperienceItem).toList();
 
-      if (preloadedItems?.isNotEmpty == true) {
-        print('🎯 WRAPPER PRELOAD INJECTION: ${widget.title} avec ${preloadedItems!.length} items préchargés');
+        print(
+            '🎯 WRAPPER PRELOAD INJECTION: ${widget.title} avec ${preloadedItems.length} items préchargés');
         return preloadedItems;
       }
-
-      return null;
-
     } catch (e) {
       print('❌ WRAPPER PRELOAD: Erreur récupération ${widget.title}: $e');
-      return null;
     }
+    return null;
   }
 
 

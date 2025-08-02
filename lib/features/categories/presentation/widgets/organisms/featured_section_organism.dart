@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../../core/domain/models/shared/category_view_model.dart';
 import '../../../../../core/domain/models/activity/search/searchable_activity.dart';
 import '../../../../../core/domain/models/event/search/searchable_event.dart';
@@ -13,8 +14,6 @@ import '../../../../search/application/state/city_selection_state.dart';
 import '../../../../shared_ui/presentation/widgets/molecules/experience_carousel_wrapper.dart';
 import '../../../../experience_detail/presentation/pages/experience_detail_page.dart';
 import '../../../application/pagination/category_pagination_providers.dart';
-
-
 
 /// Organism pour afficher la section Featured d'une catégorie
 /// Utilise le wrapper unifié ExperienceCarouselWrapper (architecture identique CityPage)
@@ -36,9 +35,7 @@ class FeaturedSectionOrganism extends ConsumerStatefulWidget {
       _FeaturedSectionOrganismState();
 }
 
-
 class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganism> {
-
   @override
   void dispose() {
     super.dispose();
@@ -47,12 +44,11 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
   @override
   Widget build(BuildContext context) {
     final selectedCity = ref.watch(selectedCityProvider);
-
     // Si aucune ville sélectionnée, afficher un skeleton
     if (selectedCity == null) {
       return SizedBox(
         height: AppDimensions.activityCardHeight + AppDimensions.space20,
-        child: GenericExperienceCarousel(
+        child: const GenericExperienceCarousel(
           title: 'Chargement...',
           experiences: null,
           isLoading: true,
@@ -66,17 +62,14 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
   /// Construit les sections Featured avec fallback data (évite conflits)
   Widget _buildFeaturedSections(dynamic selectedCity) {
     final sectionsAsync = ref.watch(featuredSectionsByCategoryProvider(widget.currentCategory.id));
-
     return sectionsAsync.when(
       data: (sections) {
         print('🎯 FEATURED SECTIONS DATA: Reçu ${sections.length} sections à ${DateTime.now().millisecondsSinceEpoch}');
-
         if (sections.isEmpty) {
           return const SizedBox.shrink();
         }
 
         final sectionWidgets = <Widget>[];
-
         for (final section in sections) {
           sectionWidgets.add(
             _buildFeaturedSectionWithFallback(section, selectedCity),
@@ -88,7 +81,7 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
       loading: () => Container(
         height: AppDimensions.activityCardHeight + AppDimensions.space20,
         margin: EdgeInsets.only(bottom: AppDimensions.spacingXs),
-        child: GenericExperienceCarousel(
+        child: const GenericExperienceCarousel(
           title: 'Chargement sections...',
           experiences: null,
           isLoading: true,
@@ -108,38 +101,40 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
 
     // ✅ RÉCUPÉRER les données existantes comme fallback
     final fallbackDataAsync = ref.watch(
-        isEventsCategory
-            ? featuredEventsBySectionProvider((
-        sectionId: section.id,
-        categoryId: widget.currentCategory.id,
-        city: selectedCity,
-        ))
-            : featuredActivitiesBySectionProvider((
-        sectionId: section.id,
-        categoryId: widget.currentCategory.id,
-        city: selectedCity,
-        ))
+      isEventsCategory
+          ? featuredEventsBySectionProvider((
+      sectionId: section.id,
+      categoryId: widget.currentCategory.id,
+      city: selectedCity,
+      ))
+          : featuredActivitiesBySectionProvider((
+      sectionId: section.id,
+      categoryId: widget.currentCategory.id,
+      city: selectedCity,
+      )),
     );
 
     return fallbackDataAsync.when(
       data: (fallbackExperiences) {
         print('🎯 FEATURED FALLBACK: ${section.title} avec ${fallbackExperiences.length} items à ${DateTime.now().millisecondsSinceEpoch}');
 
-        final params = createFeaturedParams(
+        // ✅ CORRECTION : Utiliser CategoryCarouselParams au lieu de createFeaturedParams
+        final params = CategoryCarouselParams(
           city: selectedCity,
           sectionId: section.id,
           categoryId: widget.currentCategory.id,
+          subcategoryId: null, // Featured n'a pas de sous-catégorie
         );
 
         return ExperienceCarouselWrapper(
           key: ValueKey('featured_unified_${widget.currentCategory.id}_${section.id}'),
           paginationProvider: categoryFeaturedPaginationProvider,
-          providerParams: params,
+          providerParams: params, // ✅ CORRECTION : Objet CategoryCarouselParams
           title: section.title,
           heroPrefix: 'featured-${widget.currentCategory.id}-${section.id}',
           openBuilder: _buildOpenBuilder(),
           showDistance: true,
-          fallbackExperiences: fallbackExperiences, // ✅ DONNÉES FALLBACK
+          fallbackExperiences: fallbackExperiences, // ✅ DONNÉES FALLBACK gardées
         );
       },
       loading: () => Container(
@@ -158,7 +153,6 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
     );
   }
 
-
   /// OpenBuilder unifié Activities + Events
   Widget Function(BuildContext, VoidCallback, dynamic)? _buildOpenBuilder() {
     return widget.openBuilder != null
@@ -169,7 +163,7 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
           onClose: action,
         );
       } else {
-// Fallback legacy pour SearchableActivity
+        // Fallback legacy pour SearchableActivity
         if (experience.isEvent) {
           print('Navigation vers événement: ${experience.name}');
           return ExperienceDetailPage(

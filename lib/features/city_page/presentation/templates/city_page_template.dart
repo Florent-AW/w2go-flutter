@@ -13,6 +13,7 @@ import '../../../preload/application/pagination_controller.dart';
 import '../../../search/application/state/city_selection_state.dart';
 import '../../../shared_ui/presentation/widgets/organisms/generic_experience_carousel.dart';
 import '../../../shared_ui/presentation/widgets/molecules/experience_carousel_wrapper.dart';
+import '../../../categories/application/state/categories_provider.dart';
 import '../../application/providers/city_experiences_controller.dart';
 import '../../application/pagination/city_pagination_providers.dart';
 import '../widgets/delegates/city_page_cover_delegate.dart';
@@ -42,21 +43,8 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ TEMPORAIREMENT DÉSACTIVÉ pour test preload pur
-    // final experiencesAsync = ref.watch(cityExperiencesControllerProvider(widget.cityId));
-
-    // ✅ MODE TEST : Structure minimale pour validation preload
-    final selectedCity = ref.watch(selectedCityProvider);
+    final experiencesAsync = ref.watch(cityExperiencesControllerProvider(widget.cityId));
     final screenWidth = MediaQuery.of(context).size.width;
-
-    if (selectedCity == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    // ✅ STRUCTURE TEST avec categories mockées
-    final mockCategories = _createMockCategoriesForTest();
 
     // Utiliser les physics appropriées selon la plateforme
     final scrollPhysics = Theme.of(context).platform == TargetPlatform.iOS
@@ -65,9 +53,7 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.background,
-      extendBodyBehindAppBar: true, // ✅ CLEF - Body derrière AppBar
-
-      // ✅ AppBar sticky avec animation background/couleur
+      extendBodyBehindAppBar: true,
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(70),
         child: AnimatedContainer(
@@ -92,14 +78,13 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
           ),
         ),
       ),
-
       body: MediaQuery.removePadding(
         context: context,
-        removeTop: true, // ✅ Supprime le padding du haut
+        removeTop: true,
         child: NotificationListener<ScrollNotification>(
           onNotification: (notification) {
             if (notification is ScrollUpdateNotification && notification.depth == 0) {
-              final isScrolled = notification.metrics.pixels > 200; // ✅ Seuil adapté à la cover
+              final isScrolled = notification.metrics.pixels > 200;
               if (isScrolled != _isHeaderScrolled) {
                 setState(() => _isHeaderScrolled = isScrolled);
               }
@@ -111,20 +96,24 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
             primary: true,
             physics: scrollPhysics,
             slivers: [
-              // 1. Cover défilable - ✅ CORRIGÉ : utilise mockCategories
+              // 1. Cover défilable - ✅ GARDÉ TEL QUEL
               SliverPersistentHeader(
-                pinned: false, // ✅ Cover défilable
-                delegate: _buildCoverDelegate(context, mockCategories, screenWidth),
+                pinned: false,
+                delegate: experiencesAsync.when(
+                  data: (categories) => _buildCoverDelegate(context, categories, screenWidth),
+                  loading: () => CityPageCoverDelegateSkeleton(screenWidth: screenWidth),
+                  error: (_, __) => _buildCoverDelegate(context, [], screenWidth),
+                ),
               ),
-
               SliverToBoxAdapter(
-                child: SizedBox(height: AppDimensions.spacingM), // ✅ PADDING SOUS COVER
+                child: SizedBox(height: AppDimensions.spacingM),
               ),
-
-              // 2. Contenu principal (carrousels) - ✅ CORRIGÉ : utilise mockCategories
-              _buildCategorySections(context, mockCategories),
-
-              // 3. Espacement final
+              // 2. Contenu principal - ✅ HYBRIDE : CityExperiencesController + Preload fallback
+              experiencesAsync.when(
+                data: (categories) => _buildCategorySections(context, categories),
+                loading: () => _buildPreloadedSections(context), // ✅ NOUVEAU : Preload pendant loading
+                error: (error, stackTrace) => _buildErrorSection(context, error),
+              ),
               SliverToBoxAdapter(
                 child: SizedBox(height: AppDimensions.spacingXl),
               ),
@@ -135,37 +124,49 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
     );
   }
 
-  /// ✅ TEMPORAIRE : Categories mockées pour test preload pur
-  List<CategoryExperiences> _createMockCategoriesForTest() {
-    // Structure minimale pour que les wrappers fonctionnent
-    final selectedCity = ref.read(selectedCityProvider);
-    if (selectedCity == null) return [];
+  /// ✅ NOUVEAU : Sections avec données préchargées pendant le loading du controller
+  Widget _buildPreloadedSections(BuildContext context) {
+    final selectedCity = ref.watch(selectedCityProvider);
+    final categoriesAsync = ref.watch(categoriesProvider);
 
-    // Mock 7 catégories avec structure basique
-    return [
-      'c3b42899-fdc3-48f7-bd85-09be3381aba9', // Événements
-      'culture-id',
-      'nature-id',
-      'patrimoine-id',
-      'gastronomie-id',
-      'bien-etre-id',
-      'detente-id',
-    ].map((categoryId) => CategoryExperiences(
-      category: Category(id: categoryId, name: 'Test $categoryId'),
-      sections: [
-        SectionExperiences(
-          section: SectionMetadata(
-            id: '5aa09feb-397a-4ad1-8142-7dcf0b2edd0f',
-            title: 'Test $categoryId',
-            sectionType: 'city_featured',
-            priority: 1,
-            categoryId: categoryId,
+    if (selectedCity == null) return _buildLoadingSections(context);
+
+    return categoriesAsync.when(
+      data: (categories) {
+        return SliverList(
+          delegate: SliverChildBuilderDelegate(
+                (context, index) {
+              final category = categories[index];
+
+              return Container(
+                margin: EdgeInsets.only(bottom: AppDimensions.spacingL),
+                child: ExperienceCarouselWrapper(
+                  key: ValueKey('city_preload_${category.id}'),
+                  paginationProvider: cityActivitiesPaginationProvider,
+                  providerParams: CityCarouselParams(
+                    city: selectedCity,
+                    sectionId: '5aa09feb-397a-4ad1-8142-7dcf0b2edd0f', // Featured section
+                    categoryId: category.id,
+                  ),
+                  title: category.name, // ✅ Vrai nom de catégorie
+                  heroPrefix: 'city-preload-${category.id}',
+                  openBuilder: widget.openBuilder,
+                  showDistance: true,
+                  onSeeAllPressed: () => _onSeeAllPressed(context, category, null),
+                  // ✅ PAS de fallbackExperiences - le wrapper utilise directement le preload
+                ),
+              );
+            },
+            childCount: categories.length,
           ),
-          experiences: [], // Vide - sera rempli par preload
-        ),
-      ],
-    )).toList();
+        );
+      },
+      loading: () => _buildLoadingSections(context),
+      error: (_, __) => _buildLoadingSections(context),
+    );
   }
+
+
 
   /// Construit les sections par catégorie avec des données
   Widget _buildCategorySections(BuildContext context, List<CategoryExperiences> categories) {
@@ -328,13 +329,14 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
 
   /// Callback pour "Voir tout" - navigation vers CategoryPage
   void _onSeeAllPressed(BuildContext context, dynamic category, dynamic section) {
-    print('📋 Voir tout pour catégorie: ${category.name}, section: ${section.title}');
+    print('📋 Voir tout pour catégorie: ${category.name}');
 
     // Navigation vers CategoryPage avec cette catégorie
     Navigator.of(context).pushNamed(
       '/category/${category.id}',
     );
   }
+
 
   /// Retry en cas d'erreur
   void _retryLoading(BuildContext context) {

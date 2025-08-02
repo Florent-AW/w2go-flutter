@@ -94,6 +94,26 @@ void main() async {
       ],
     );
 
+// ✅ STEP 1 : Listener automatique pour changement de ville
+    container.listen(
+      selectedCityProvider,
+          (previous, next) async {
+        // Ne trigger que si la ville change vraiment
+        if (previous?.id != next?.id && next != null) {
+          print('🏙️ Changement de ville détecté: ${previous?.cityName} → ${next.cityName}');
+
+          try {
+            await container.read(allDataPreloaderProvider.notifier).load3ItemsEverywhere(next.id);
+            print('✅ STEP 1: Preload automatique terminé pour ${next.cityName}');
+          } catch (e) {
+            print('❌ Erreur preload automatique: $e');
+          }
+        }
+      },
+    );
+
+    print('🎯 STEP 1: Configuration du listener automatique');
+
     // ✅ PRELOAD : CityPage + 1 catégorie test
     if (savedCity != null) {
       await container.read(allDataPreloaderProvider.notifier).load3ItemsEverywhere(savedCity.id);
