@@ -160,7 +160,7 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
   }
 
   /// Récupère les données préchargées depuis AllDataPreloader si disponibles
-  List? _getPreloadedData() {
+  List<ExperienceItem>? _getPreloadedData() {
     try {
       final preloadData = ref.read(allDataPreloaderProvider);
       if (preloadData.isEmpty) return null;
@@ -179,8 +179,7 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
       } else if (providerName.contains('categorySubcategory')) {
         // CategoryPage Subcategory : categoryId_sectionId_subcategoryId
         final params = widget.providerParams as dynamic;
-        carouselKey =
-        '${params.categoryId}_${params.sectionId}_${params.subcategoryId}';
+        carouselKey = '${params.categoryId}_${params.sectionId}_${params.subcategoryId}';
       } else {
         // Fallback générique
         final params = widget.providerParams as dynamic;
@@ -189,21 +188,22 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
 
       final preloadedItemsRaw = preloadData[carouselKey];
       if (preloadedItemsRaw?.isNotEmpty == true) {
-        // Conversion explicite en List<ExperienceItem>
+        // ✅ CORRECTION TYPE-SAFE : Filtre seulement les ExperienceItem valides
         final rawList = preloadedItemsRaw as List;
-        final preloadedItems =
-        rawList.map((e) => e as ExperienceItem).toList();
+        final preloadedItems = rawList
+            .whereType<ExperienceItem>()  // Filtre automatiquement les types valides
+            .toList();
 
-        print(
-            '🎯 WRAPPER PRELOAD INJECTION: ${widget.title} avec ${preloadedItems.length} items préchargés');
-        return preloadedItems;
+        if (preloadedItems.isNotEmpty) {
+          print('🎯 WRAPPER PRELOAD INJECTION: ${widget.title} avec ${preloadedItems.length} items préchargés');
+          return preloadedItems;
+        }
       }
     } catch (e) {
       print('❌ WRAPPER PRELOAD: Erreur récupération ${widget.title}: $e');
     }
     return null;
   }
-
 
 
 
