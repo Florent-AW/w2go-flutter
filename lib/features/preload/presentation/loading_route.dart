@@ -1,5 +1,106 @@
-// lib/features/preload/presentation/loading_route.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/domain/models/shared/city_model.dart';
+import '../../../../core/common/utils/caching_image_provider.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../categories/application/state/categories_provider.dart';
+import '../application/preload_providers.dart';
+import '../application/preload_controller.dart';
 
-// ✅ NOUVEAU SYSTÈME : AllDataPreloader avec trigger universel dans HomeShell
-// Voir: lib/core/application/all_data_preloader.dart
-// Voir: lib/features/home/presentation/pages/home_shell.dart
+class LoadingRoute extends ConsumerStatefulWidget {
+  final City targetCity;
+  final String targetPageType;
+
+  const LoadingRoute({
+    Key? key,
+    required this.targetCity,
+    required this.targetPageType,
+  }) : super(key: key);
+
+  @override
+  ConsumerState<LoadingRoute> createState() => _LoadingRouteState();
+}
+
+class _LoadingRouteState extends ConsumerState<LoadingRoute> {
+  @override
+  void initState() {
+    super.initState();
+
+    // Démarrer le préchargement
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(preloadControllerProvider.notifier).startPreload(
+        widget.targetCity,
+        widget.targetPageType,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final preloadData = ref.watch(preloadControllerProvider);
+
+    // Écouter les changements d'état pour naviguer
+    ref.listen(preloadControllerProvider, (previous, next) async {
+      if (next.state == PreloadState.ready) {
+        // Precache les images avec le context local
+        if (next.criticalImageUrls.isNotEmpty) {
+          print('🖼️ PRÉCACHE: Début pour ${next.criticalImageUrls.length} images'); // ✅ DEBUG
+          await CachingImageProvider.precacheMultiple(
+            next.criticalImageUrls,
+            context,
+            maxConcurrent: 3,
+          );
+          print('✅ PRÉCACHE: Terminé pour ${next.criticalImageUrls.length} images'); // ✅ DEBUG
+        }
+        _navigateToTarget();
+      }
+    });
+
+    return Scaffold(
+      backgroundColor: AppColors.primary,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: Colors.white),
+            SizedBox(height: 24),
+            Text(
+              'Préparation de ${widget.targetCity.cityName}...',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _navigateToTarget() {
+    switch (widget.targetPageType) {
+      case 'city':
+      // Naviguer vers la route principale "/city" pour conserver la bottom bar
+        Navigator.of(context).pushReplacementNamed('/city');
+        break;
+      case 'category':
+      // ✅ CLEAN : LoadingRoute détermine la première catégorie
+        final categories = ref.read(categoriesProvider).value ?? [];
+        final firstCategory = categories.isNotEmpty ? categories.first : null;
+
+        if (firstCategory != null) {
+          // Utiliser la route principale "/category" pour afficher HomeShell
+          // La sélection sera initialisée avec la première catégorie
+          Navigator.of(context).pushReplacementNamed('/category');
+        } else {
+          // Fallback vers city si aucune catégorie
+          print('⚠️ NAVIGATION: Aucune catégorie disponible, fallback vers city');
+          Navigator.of(context).pushReplacementNamed('/city');
+        }
+        break;
+      default:
+        Navigator.of(context).pushReplacementNamed('/city');
+    }
+  }
+
+}

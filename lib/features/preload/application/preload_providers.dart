@@ -1,4 +1,8 @@
 // lib/features/preload/application/preload_providers.dart
 
-// ✅ NOUVEAU : Ce fichier est désactivé - AllDataPreloader est utilisé à la place
-// Voir: lib/core/application/all_data_preloader.dart
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'preload_controller.dart';
+
+final preloadControllerProvider = StateNotifierProvider<PreloadController, PreloadData>((ref) {
+  return PreloadController(ref);
+});

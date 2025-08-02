@@ -68,10 +68,8 @@ class PaginationController<T> extends StateNotifier<PaginationState<T>> {
 
   /// Charge la première page avec taille preload (T0)
   Future<void> loadPreload() async {
-    // ✅ Protection contre l'utilisation après dispose
-    if (mounted == false) return;
-
-    if (state.isLoading) return;
+    // ✅ PROTECTION contre dispose
+    if (!mounted || state.isLoading) return;
 
     state = state.copyWith(isLoading: true, error: null);
 
@@ -81,22 +79,21 @@ class PaginationController<T> extends StateNotifier<PaginationState<T>> {
         limit: _provider.preloadPageSize,
       );
 
-      // ✅ Vérifier à nouveau si toujours monté avant de modifier le state
-      if (mounted == false) return;
+      // ✅ PROTECTION avant setState
+      if (!mounted) return;
 
       state = state.copyWith(
         isLoading: false,
         items: result.items,
         hasMore: result.hasMore,
         currentOffset: result.nextOffset,
-        isPartial: true, // ✅ Marquer comme partiel
+        isPartial: true,
       );
 
       print('✅ PAGINATION PRELOAD: ${_provider.providerId} → ${result.items.length} items (preload)');
 
     } catch (e) {
-      // ✅ Vérifier à nouveau si toujours monté avant de modifier le state
-      if (mounted == false) return;
+      if (!mounted) return; // ✅ PROTECTION
 
       state = state.copyWith(
         isLoading: false,

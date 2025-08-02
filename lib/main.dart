@@ -21,7 +21,6 @@ import 'core/adapters/cache/hive_recent_cities_adapter.dart';
 import 'core/adapters/supabase/search/suggested_cities_adapter.dart';
 import 'core/domain/ports/providers/search/recent_cities_provider.dart';
 import 'core/domain/ports/providers/search/suggested_cities_provider.dart';
-import 'features/preload/application/all_data_preloader.dart';
 import '../core/adapters/cache/hive_location_cache_adapter.dart';
 
 import 'routes/app_router.dart';
@@ -73,56 +72,24 @@ void main() async {
     PaintingBinding.instance.imageCache?.maximumSizeBytes = 360 * 1024 * 1024;
     PaintingBinding.instance.imageCache?.maximumSize = 1000;
 
-    // ✅ STEP 1 : Preload One Shot au démarrage
-    print('🚀 STEP 1: Démarrage preload simple');
-    final container = ProviderContainer(
-      overrides: [
-        googleServicesConfigProvider.overrideWithValue(googleConfig),
-        if (savedCity != null)
-          selectedCityProvider.overrideWith((ref) => CitySelectionNotifier(savedCity)),
-        recentCitiesPortProvider.overrideWithProvider(
-          Provider((ref) {
-            final adapter = HiveRecentCitiesAdapter();
-            adapter.initializeAsync();
-            return adapter;
-          }),
-        ),
-        suggestedCitiesPortProvider.overrideWithProvider(
-          Provider((ref) => SupabaseSuggestedCitiesAdapter.fromService(
-              Supabase.instance.client)),
-        ),
-      ],
-    );
-
-// ✅ STEP 1 : Listener automatique pour changement de ville
-    container.listen(
-      selectedCityProvider,
-          (previous, next) async {
-        // Ne trigger que si la ville change vraiment
-        if (previous?.id != next?.id && next != null) {
-          print('🏙️ Changement de ville détecté: ${previous?.cityName} → ${next.cityName}');
-
-          try {
-            await container.read(allDataPreloaderProvider.notifier).load3ItemsEverywhere(next.id);
-            print('✅ STEP 1: Preload automatique terminé pour ${next.cityName}');
-          } catch (e) {
-            print('❌ Erreur preload automatique: $e');
-          }
-        }
-      },
-    );
-
-    print('🎯 STEP 1: Configuration du listener automatique');
-
-    // ✅ PRELOAD : CityPage + 1 catégorie test
-    if (savedCity != null) {
-      await container.read(allDataPreloaderProvider.notifier).load3ItemsEverywhere(savedCity.id);
-      print('✅ STEP 1: Preload terminé pour ${savedCity.id}');
-    }
-
     runApp(
-      UncontrolledProviderScope(
-        container: container,
+      ProviderScope(
+        overrides: [
+          googleServicesConfigProvider.overrideWithValue(googleConfig),
+          if (savedCity != null)
+            selectedCityProvider.overrideWith((ref) => CitySelectionNotifier(savedCity)),
+          recentCitiesPortProvider.overrideWithProvider(
+            Provider((ref) {
+              final adapter = HiveRecentCitiesAdapter();
+              adapter.initializeAsync();
+              return adapter;
+            }),
+          ),
+          suggestedCitiesPortProvider.overrideWithProvider(
+            Provider((ref) => SupabaseSuggestedCitiesAdapter.fromService(
+                Supabase.instance.client)),
+          ),
+        ],
         child: const MyApp(),
       ),
     );
@@ -130,6 +97,7 @@ void main() async {
     print('Error initializing app: $e');
   }
 }
+
 class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 

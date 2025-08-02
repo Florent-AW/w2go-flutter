@@ -37,30 +37,35 @@ class CityCarouselParams {
   String toString() => 'CityCarouselParams(city: ${city.cityName}, section: $sectionId, category: $categoryId)';
 }
 
-/// Provider pour la pagination des activités d’une ville.
+/// Provider pour la pagination des activités d'une ville.
 final cityActivitiesPaginationProvider =
-StateNotifierProvider.family.autoDispose<
-    PaginationController<ExperienceItem>,   // Notifier
-    PaginationState<ExperienceItem>,        // State
-    CityCarouselParams                      // Paramètre
+StateNotifierProvider.family<  // ✅ RETIRER .autoDispose
+    PaginationController<ExperienceItem>,
+    PaginationState<ExperienceItem>,
+    CityCarouselParams
 >(
       (ref, params) {
-    // Data-provider spécifique (ville + catégorie + section)
+    // ✅ CORRECTION : Aligner section événements avec preload
+    const eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
+    const eventsSectionId = '7f94df23-ab30-4bf3-afb2-59320e5466a7';
+
+    final realSectionId = params.categoryId == eventsCategoryId
+        ? eventsSectionId  // ✅ Forcer section événements = preload
+        : params.sectionId; // Garder section normale pour activités
+
+    print('🔧 SECTION ALIGNMENT: ${params.categoryId == eventsCategoryId ? "EVENTS" : "ACTIVITY"} → $realSectionId');
+
     final dataProvider = CityActivitiesDataProvider(
       ref: ref,
       city: params.city,
-      sectionId: params.sectionId,
+      sectionId: realSectionId, // ✅ Clé alignée preload
       categoryId: params.categoryId,
     );
 
-    // 🔄 Invalidation automatique quand la ville change
     ref.listen(selectedCityProvider, (previous, next) {
       if (previous?.id != next?.id) {
-        print(
-          '🔄 CITY CHANGE: Invalidation pagination pour ${next?.cityName}',
-        );
-        // Grâce à .autoDispose, le controller sera libéré
-        // et recréé avec la nouvelle ville au prochain watch().
+        print('🔄 CITY CHANGE: Invalidation pagination pour ${next?.cityName}');
+        ref.invalidateSelf();
       }
     });
 

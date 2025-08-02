@@ -7,9 +7,9 @@ import '../../../categories/presentation/pages/category_page.dart';
 import '../../../city_page/presentation/pages/city_page.dart';
 import '../../../shared_ui/presentation/widgets/organisms/generic_bottom_bar.dart';
 import '../../../search/application/state/city_selection_state.dart';
-import '../../../preload/application/all_data_preloader.dart';
+import '../../../preload/application/preload_providers.dart';
+import '../../../preload/application/preload_controller.dart';
 import '../../../../core/domain/models/shared/city_model.dart';
-
 
 class HomeShell extends ConsumerStatefulWidget {
   /// Tab initial à afficher
@@ -24,10 +24,17 @@ class HomeShell extends ConsumerStatefulWidget {
   ConsumerState<HomeShell> createState() => _HomeShellState();
 }
 
-// ✅ NOUVEAU
 class _HomeShellState extends ConsumerState<HomeShell> {
   late BottomNavTab _currentTab;
   bool _hasInitialized = false;
+  bool _isTransitioning = false;
+
+  // Contrôle opacity
+  double _overlayOpacity = 1.0;
+
+  // Garde anti-doublon
+  City? _lastPreloadCity;
+  String? _lastPreloadTarget;
 
   @override
   void initState() {
@@ -37,98 +44,105 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ CORRECTION : ref.listen dans build avec protection
+    // ✅ Initialisation avec protection
     if (!_hasInitialized) {
       _hasInitialized = true;
 
-      // Déclenchement immédiat si ville déjà sélectionnée
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final currentCity = ref.read(selectedCityProvider);
         if (currentCity != null) {
           print('🏙️ INIT: Ville déjà sélectionnée ${currentCity.cityName}, déclenchement preload');
-          try {
-            ref.read(allDataPreloaderProvider.notifier).load3ItemsEverywhere(currentCity.id);
-          } catch (e) {
-            print('❌ INIT: Erreur preload initial $e');
-          }
+          _triggerPreload(currentCity);
         }
       });
     }
 
-    // ✅ ref.listen dans build
+    // ✅ Écouter changements de ville
     ref.listen<City?>(selectedCityProvider, (previous, next) {
       print('🔥 HOME SHELL LISTEN: previous=${previous?.cityName}, next=${next?.cityName}');
 
       if (next != null && (previous == null || previous.id != next.id)) {
         print('🌍 TRIGGER UNIVERSEL: Déclenchement preload pour ${next.cityName}');
-
-        try {
-          ref.read(allDataPreloaderProvider.notifier).load3ItemsEverywhere(next.id);
-          print('✅ TRIGGER: Preload lancé pour ${next.cityName}');
-        } catch (e) {
-          print('❌ TRIGGER: Erreur preload $e');
-        }
+        _triggerPreload(next);
       }
     });
 
-    // ✅ Écouter le state preload pour rebuild
-    final preloadData = ref.watch(allDataPreloaderProvider);
-    final isPreloading = ref.watch(allDataPreloaderProvider.notifier).isLoading;
+    // ✅ NOUVEAU : Écouter fin preload pour lever overlay
+    ref.listen<PreloadData>(preloadControllerProvider, (previous, next) {
+      if (previous?.state != PreloadState.ready && next.state == PreloadState.ready) {
+        print('✅ PRELOAD READY: Lever overlay à la prochaine frame');
+        _onPreloadBecameReady();
+      }
+    });
+
+    final preloadData = ref.watch(preloadControllerProvider);
     final selectedCity = ref.watch(selectedCityProvider);
 
-    print('🏠 HOME SHELL BUILD: isPreloading=$isPreloading, city=${selectedCity?.cityName}');
-    print('🏠 HOME SHELL BUILD: preloadData=${preloadData.length} carrousels');
+    // ✅ CONDITION OVERLAY : Preload en cours OU transition
+    final shouldShowOverlay = (preloadData.state == PreloadState.loading || _isTransitioning)
+        && selectedCity != null;
 
-    // ✅ LOADING BLOQUANT : Afficher que l'écran bleu si preload en cours
-    if (isPreloading && selectedCity != null) {
-      print('🔵 HOME SHELL: Affichage écran bleu pour ${selectedCity.cityName}');
-      return Scaffold(
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const CircularProgressIndicator(color: Colors.white),
-              const SizedBox(height: 16),
-              Text(
-                'Chargement de ${selectedCity.cityName}...',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Préparation des expériences',
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
+    print('🏠 HOME SHELL BUILD: overlay=$shouldShowOverlay, preloadState=${preloadData.state}, isTransitioning=$_isTransitioning');
 
-    // ✅ PAGES NORMALES : Seulement quand preload terminé
     return Scaffold(
-      body: PageTransitionSwitcher(
-        duration: const Duration(milliseconds: 200),
-        transitionBuilder: (child, animation, secondaryAnimation) {
-          return SharedAxisTransition(
-            animation: animation,
-            secondaryAnimation: secondaryAnimation,
-            transitionType: SharedAxisTransitionType.horizontal,
-            fillColor: Theme.of(context).colorScheme.background,
-            child: child,
-          );
-        },
-        child: KeyedSubtree(
-          key: ValueKey(_currentTab),
-          child: _getPageForTab(_currentTab),
-        ),
+      body: Stack(
+        children: [
+          // ⚡️ TOUJOURS construire la page cible (wrappers montent immédiatement)
+          PageTransitionSwitcher(
+            duration: const Duration(milliseconds: 200),
+            transitionBuilder: (child, animation, secondaryAnimation) {
+              return SharedAxisTransition(
+                animation: animation,
+                secondaryAnimation: secondaryAnimation,
+                transitionType: SharedAxisTransitionType.horizontal,
+                fillColor: Theme.of(context).colorScheme.background,
+                child: child,
+              );
+            },
+            child: KeyedSubtree(
+              key: ValueKey(_currentTab),
+              child: _getPageForTab(_currentTab), // CityPage/CategoryPage construites immédiatement
+            ),
+          ),
+
+          // 🔵 OVERLAY avec fade-out élégant
+          if (shouldShowOverlay)
+            Positioned.fill(
+              child: AnimatedOpacity(
+                opacity: _overlayOpacity,
+                duration: const Duration(milliseconds: 250), // ✅ Fade fluide 250ms
+                curve: Curves.easeOutCubic, // ✅ Courbe élégante
+                child: Container(
+                  color: Theme.of(context).colorScheme.primary,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const CircularProgressIndicator(color: Colors.white),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Chargement de ${selectedCity!.cityName}...',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Préparation des expériences',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
       bottomNavigationBar: GenericBottomBar(
         selectedTab: _currentTab,
@@ -140,6 +154,33 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       ),
     );
   }
+
+  /// ✅ Déclenche le preload avec le bon targetPageType
+  void _triggerPreload(City city) {
+    try {
+      final targetPageType = _currentTab == BottomNavTab.visiter ? 'city' : 'category';
+
+      if (_lastPreloadCity?.id == city.id && _lastPreloadTarget == targetPageType) {
+        print('⚠️ PRELOAD SKIP: Déjà lancé pour ${city.cityName} ($targetPageType)');
+        return;
+      }
+
+      _lastPreloadCity = city;
+      _lastPreloadTarget = targetPageType;
+
+      // ✅ NOUVEAU : Reset opacité pour nouveau preload
+      setState(() {
+        _overlayOpacity = 1.0;
+      });
+
+      print('🚀 TRIGGER PRELOAD: ${city.cityName} pour $targetPageType');
+      ref.read(preloadControllerProvider.notifier).startPreload(city, targetPageType);
+
+    } catch (e) {
+      print('❌ TRIGGER: Erreur preload $e');
+    }
+  }
+
 
   /// Retourne la page correspondant au tab
   Widget _getPageForTab(BottomNavTab tab) {
@@ -158,4 +199,35 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         );
     }
   }
+
+  /// ✅ Lever overlay avec fade élégant
+  void _onPreloadBecameReady() {
+    setState(() {
+      _isTransitioning = true;
+    });
+
+    // ⚡️ Attendre une frame pour que l'injection soit garantie
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        print('🎨 FADE OUT: Démarrage animation overlay');
+
+        // ✅ FADE OUT : Animer l'opacité vers 0
+        setState(() {
+          _overlayOpacity = 0.0;
+        });
+
+        // ✅ SUPPRIMER après animation (250ms)
+        Future.delayed(const Duration(milliseconds: 250), () {
+          if (mounted) {
+            print('🚀 OVERLAY REMOVED: Animation terminée');
+            setState(() {
+              _isTransitioning = false;
+              _overlayOpacity = 1.0; // Reset pour prochaine fois
+            });
+          }
+        });
+      }
+    });
+  }
+
 }

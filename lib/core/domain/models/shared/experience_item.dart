@@ -1,16 +1,17 @@
 // lib/core/domain/models/shared/experience_item.dart
 
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:json_annotation/json_annotation.dart';
 import '../activity/search/searchable_activity.dart';
 import '../event/search/searchable_event.dart';
 
 part 'experience_item.freezed.dart';
+part 'experience_item.g.dart'; //
 
 /// Abstraction commune pour Activities et Events
 /// Permet d'afficher les deux types dans les mêmes carousels
 @freezed
 class ExperienceItem with _$ExperienceItem {
-
   /// Constructeur pour une activité
   const factory ExperienceItem.activity(SearchableActivity activity) = ActivityExperience;
 
@@ -18,6 +19,10 @@ class ExperienceItem with _$ExperienceItem {
   const factory ExperienceItem.event(SearchableEvent event) = EventExperience;
 
   const ExperienceItem._();
+
+  // ✅ AJOUT : Méthodes de sérialisation
+  factory ExperienceItem.fromJson(Map<String, dynamic> json) =>
+      _$ExperienceItemFromJson(json);
 
   /// Getters communs pour l'affichage UI
   String get id => when(

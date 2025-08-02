@@ -258,7 +258,7 @@ class CategorySubcategoryDataProvider extends ExperienceDataProvider {
 }
 
 /// Provider de PaginationController pour carrousels Featured
-final categoryFeaturedPaginationProvider = StateNotifierProvider.family.autoDispose<
+final categoryFeaturedPaginationProvider = StateNotifierProvider.family<
     PaginationController<ExperienceItem>,
     PaginationState<ExperienceItem>,
     CategoryCarouselParams
@@ -276,7 +276,7 @@ final categoryFeaturedPaginationProvider = StateNotifierProvider.family.autoDisp
 });
 
 /// Provider de PaginationController pour carrousels Subcategory
-final categorySubcategoryPaginationProvider = StateNotifierProvider.family.autoDispose<
+final categorySubcategoryPaginationProvider = StateNotifierProvider.family<
     PaginationController<ExperienceItem>,
     PaginationState<ExperienceItem>,
     CategoryCarouselParams

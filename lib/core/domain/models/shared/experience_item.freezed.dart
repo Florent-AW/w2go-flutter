@@ -14,6 +14,19 @@ T _$identity<T>(T value) => value;
 final _privateConstructorUsedError = UnsupportedError(
     'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
 
+ExperienceItem _$ExperienceItemFromJson(Map<String, dynamic> json) {
+  switch (json['runtimeType']) {
+    case 'activity':
+      return ActivityExperience.fromJson(json);
+    case 'event':
+      return EventExperience.fromJson(json);
+
+    default:
+      throw CheckedFromJsonException(json, 'runtimeType', 'ExperienceItem',
+          'Invalid union type "${json['runtimeType']}"!');
+  }
+}
+
 /// @nodoc
 mixin _$ExperienceItem {
   @optionalTypeArgs
@@ -54,6 +67,9 @@ mixin _$ExperienceItem {
     required TResult orElse(),
   }) =>
       throw _privateConstructorUsedError;
+
+  /// Serializes this ExperienceItem to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
 }
 
 /// @nodoc
@@ -123,12 +139,20 @@ class __$$ActivityExperienceImplCopyWithImpl<$Res>
 }
 
 /// @nodoc
-
+@JsonSerializable()
 class _$ActivityExperienceImpl extends ActivityExperience {
-  const _$ActivityExperienceImpl(this.activity) : super._();
+  const _$ActivityExperienceImpl(this.activity, {final String? $type})
+      : $type = $type ?? 'activity',
+        super._();
+
+  factory _$ActivityExperienceImpl.fromJson(Map<String, dynamic> json) =>
+      _$$ActivityExperienceImplFromJson(json);
 
   @override
   final SearchableActivity activity;
+
+  @JsonKey(name: 'runtimeType')
+  final String $type;
 
   @override
   String toString() {
@@ -144,6 +168,7 @@ class _$ActivityExperienceImpl extends ActivityExperience {
                 other.activity == activity));
   }
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(runtimeType, activity);
 
@@ -217,12 +242,22 @@ class _$ActivityExperienceImpl extends ActivityExperience {
     }
     return orElse();
   }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$ActivityExperienceImplToJson(
+      this,
+    );
+  }
 }
 
 abstract class ActivityExperience extends ExperienceItem {
   const factory ActivityExperience(final SearchableActivity activity) =
       _$ActivityExperienceImpl;
   const ActivityExperience._() : super._();
+
+  factory ActivityExperience.fromJson(Map<String, dynamic> json) =
+      _$ActivityExperienceImpl.fromJson;
 
   SearchableActivity get activity;
 
@@ -279,12 +314,20 @@ class __$$EventExperienceImplCopyWithImpl<$Res>
 }
 
 /// @nodoc
-
+@JsonSerializable()
 class _$EventExperienceImpl extends EventExperience {
-  const _$EventExperienceImpl(this.event) : super._();
+  const _$EventExperienceImpl(this.event, {final String? $type})
+      : $type = $type ?? 'event',
+        super._();
+
+  factory _$EventExperienceImpl.fromJson(Map<String, dynamic> json) =>
+      _$$EventExperienceImplFromJson(json);
 
   @override
   final SearchableEvent event;
+
+  @JsonKey(name: 'runtimeType')
+  final String $type;
 
   @override
   String toString() {
@@ -299,6 +342,7 @@ class _$EventExperienceImpl extends EventExperience {
             (identical(other.event, event) || other.event == event));
   }
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(runtimeType, event);
 
@@ -372,12 +416,22 @@ class _$EventExperienceImpl extends EventExperience {
     }
     return orElse();
   }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$EventExperienceImplToJson(
+      this,
+    );
+  }
 }
 
 abstract class EventExperience extends ExperienceItem {
   const factory EventExperience(final SearchableEvent event) =
       _$EventExperienceImpl;
   const EventExperience._() : super._();
+
+  factory EventExperience.fromJson(Map<String, dynamic> json) =
+      _$EventExperienceImpl.fromJson;
 
   SearchableEvent get event;
 

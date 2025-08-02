@@ -134,7 +134,6 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
           heroPrefix: 'featured-${widget.currentCategory.id}-${section.id}',
           openBuilder: _buildOpenBuilder(),
           showDistance: true,
-          fallbackExperiences: fallbackExperiences, // ✅ DONNÉES FALLBACK gardées
         );
       },
       loading: () => Container(

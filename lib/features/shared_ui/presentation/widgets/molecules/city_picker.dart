@@ -8,8 +8,6 @@ import '../../../../../core/theme/app_dimensions.dart';
 import '../../../../../core/domain/models/shared/city_model.dart';
 import '../../../../search/application/state/city_selection_state.dart';
 import '../../../../search/application/state/place_details_notifier.dart';
-import '../../../../preload/presentation/loading_screen.dart';
-
 import '../../pages/city_picker_page.dart';
 
 /// Sélecteur de ville réutilisable
@@ -42,18 +40,33 @@ class CityPicker extends ConsumerWidget {
   });
 
   void _showCityPicker(BuildContext context, WidgetRef ref) async {
-    // Sélection de ville
+    // Réinitialiser l'état du détail de lieu
+    ref.read(placeDetailsNotifierProvider.notifier).reset();
+
+    // Ouvrir CityPickerPage
     final city = await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const CityPickerPage()),
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (context) => const CityPickerPage(),
+      ),
     );
-    if (city is! City) return;
 
-    print('🏙️ CITY PICKER: Ville sélectionnée ${city.cityName}');
+    // Vérifier si une ville a été sélectionnée
+    if (city != null && city is City) {
+      print('🎯 CITY PICKER: Ville sélectionnée: ${city.cityName}');
 
-    // Met à jour le provider → trigger automatique preload via HomeShell
-    ref.read(selectedCityProvider.notifier).selectCity(city);
+      // ✅ NOUVEAU SYSTÈME : Mettre à jour le provider (déclenche le trigger universel)
+      ref.read(selectedCityProvider.notifier).selectCity(city);
 
-    print('🏙️ CITY PICKER: Provider mis à jour pour ${city.cityName}');
+      // ✅ Navigation directe selon le contexte
+      final targetPageType = this.targetPageType ?? 'category'; // Fallback par défaut
+
+      if (targetPageType == 'city') {
+        Navigator.of(context).pushReplacementNamed('/city');
+      } else {
+        Navigator.of(context).pushReplacementNamed('/category');
+      }
+    }
   }
 
   String _formatCityName(String? cityName) {
