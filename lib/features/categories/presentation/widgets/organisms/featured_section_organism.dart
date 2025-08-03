@@ -130,6 +130,7 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
           key: ValueKey('featured_unified_${widget.currentCategory.id}_${section.id}'),
           paginationProvider: categoryFeaturedPaginationProvider,
           providerParams: params, // ✅ CORRECTION : Objet CategoryCarouselParams
+          carouselContext: CarouselContext.categoryFeatured,
           title: section.title,
           heroPrefix: 'featured-${widget.currentCategory.id}-${section.id}',
           openBuilder: _buildOpenBuilder(),

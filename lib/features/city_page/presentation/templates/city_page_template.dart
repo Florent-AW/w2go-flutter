@@ -7,9 +7,6 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_dimensions.dart';
 import '../../../../../core/theme/components/organisms/app_header.dart';
 import '../../../../../core/domain/models/shared/experience_item.dart';
-import '../../../../core/domain/models/shared/category_model.dart';
-import '../../../../core/domain/models/search/config/section_metadata.dart';
-import '../../../preload/application/pagination_controller.dart';
 import '../../../search/application/state/city_selection_state.dart';
 import '../../../shared_ui/presentation/widgets/organisms/generic_experience_carousel.dart';
 import '../../../shared_ui/presentation/widgets/molecules/experience_carousel_wrapper.dart';
@@ -148,6 +145,7 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
                     sectionId: '5aa09feb-397a-4ad1-8142-7dcf0b2edd0f', // Featured section
                     categoryId: category.id,
                   ),
+                  carouselContext: CarouselContext.city, // ✅ AJOUTÉ
                   title: category.name, // ✅ Vrai nom de catégorie
                   heroPrefix: 'city-preload-${category.id}',
                   openBuilder: widget.openBuilder,
@@ -254,6 +252,7 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
       key: ValueKey('city_unified_${categoryExp.category.id}_${sectionExp.section.id}'),
       paginationProvider: cityActivitiesPaginationProvider,
       providerParams: params,
+      carouselContext: CarouselContext.city,
       title: sectionExp.section.title,
       heroPrefix: 'city-${categoryExp.category.id}-${sectionExp.section.id}',
       openBuilder: widget.openBuilder,

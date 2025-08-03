@@ -7,6 +7,9 @@ import '../../../../core/domain/models/shared/category_model.dart';
 import '../../../../core/domain/models/shared/category_view_model.dart';
 import '../../../../core/domain/models/shared/experience_item.dart';
 import '../../../experience_detail/presentation/pages/experience_detail_page.dart';
+import '../../../preload/application/preload_providers.dart';
+import '../../../preload/application/preload_controller.dart';
+import '../../../search/application/state/city_selection_state.dart';
 import '../../application/state/categories_provider.dart';
 import '../widgets/templates/category_page_template.dart';
 
@@ -34,25 +37,21 @@ class CategoryPage extends ConsumerWidget {
           );
         }
 
-        // Déterminer la catégorie à afficher
-        Category? currentCategory;
-
-        if (categoryId != null) {
-          // Chercher la catégorie par ID
-          currentCategory = categories.firstWhere(
-                (category) => category.id == categoryId,
-            orElse: () => categories.first,
-          );
-        } else {
-          // Utiliser la catégorie sélectionnée ou la première
-          currentCategory = ref.watch(selectedCategoryProvider) ?? categories.first;
-        }
+        // ✅ DÉCLARATION NON-NULLABLE avec initialisation immédiate
+        final Category currentCategory = categoryId != null
+            ? categories.firstWhere(
+              (category) => category.id == categoryId,
+          orElse: () => categories.first,
+        )
+            : ref.watch(selectedCategoryProvider) ?? categories.first;
 
         // Mettre à jour la catégorie sélectionnée si nécessaire
         final selectedCategory = ref.read(selectedCategoryProvider);
         if (selectedCategory?.id != currentCategory.id) {
           SchedulerBinding.instance.addPostFrameCallback((_) {
+            print('🔄 CATEGORY CHANGE: Mise à jour sélection pour ${currentCategory.name}');
             ref.read(selectedCategoryProvider.notifier).state = currentCategory;
+            // ✅ PAS d'invalidation providers - le wrapper gère l'injection via ref.listen
           });
         }
 

@@ -9,7 +9,9 @@ import '../../../shared_ui/presentation/widgets/organisms/generic_bottom_bar.dar
 import '../../../search/application/state/city_selection_state.dart';
 import '../../../preload/application/preload_providers.dart';
 import '../../../preload/application/preload_controller.dart';
+import '../../../categories/application/state/categories_provider.dart';
 import '../../../../core/domain/models/shared/city_model.dart';
+import '../../../../core/common/utils/image_provider_factory.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
   /// Tab initial à afficher
@@ -28,12 +30,12 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   late BottomNavTab _currentTab;
   bool _hasInitialized = false;
   bool _isTransitioning = false;
-
-  // Contrôle opacity
   double _overlayOpacity = 1.0;
 
-  // Garde anti-doublon
+  // ✅ Garde anti-doublon preload
   City? _lastPreloadCity;
+  bool _categoryBootstrapped = false;
+
   String? _lastPreloadTarget;
 
   @override
@@ -44,14 +46,14 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Initialisation avec protection
+    // ✅ Initialisation unique avec protection
     if (!_hasInitialized) {
       _hasInitialized = true;
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final currentCity = ref.read(selectedCityProvider);
         if (currentCity != null) {
-          print('🏙️ INIT: Ville déjà sélectionnée ${currentCity.cityName}, déclenchement preload');
+          print('🏙️ INIT: Ville déjà sélectionnée ${currentCity.cityName}');
           _triggerPreload(currentCity);
         }
       });
@@ -59,35 +61,39 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
     // ✅ Écouter changements de ville
     ref.listen<City?>(selectedCityProvider, (previous, next) {
-      print('🔥 HOME SHELL LISTEN: previous=${previous?.cityName}, next=${next?.cityName}');
+      print('🔥 CITY CHANGE: ${previous?.cityName} → ${next?.cityName}');
 
       if (next != null && (previous == null || previous.id != next.id)) {
-        print('🌍 TRIGGER UNIVERSEL: Déclenchement preload pour ${next.cityName}');
+        print('🌍 TRIGGER: Preload pour ${next.cityName}');
         _triggerPreload(next);
       }
     });
 
-    // ✅ NOUVEAU : Écouter fin preload pour lever overlay
+    // ✅ Écouter fin preload pour lever overlay
     ref.listen<PreloadData>(preloadControllerProvider, (previous, next) {
       if (previous?.state != PreloadState.ready && next.state == PreloadState.ready) {
-        print('✅ PRELOAD READY: Lever overlay à la prochaine frame');
+        print('✅ PRELOAD READY: Lever overlay');
         _onPreloadBecameReady();
       }
     });
 
     final preloadData = ref.watch(preloadControllerProvider);
     final selectedCity = ref.watch(selectedCityProvider);
+    final selectedCategory = ref.watch(selectedCategoryProvider);
+    final isCategoryTab = _currentTab == BottomNavTab.explorer;
 
-    // ✅ CONDITION OVERLAY : Preload en cours OU transition
-    final shouldShowOverlay = (preloadData.state == PreloadState.loading || _isTransitioning)
-        && selectedCity != null;
 
-    print('🏠 HOME SHELL BUILD: overlay=$shouldShowOverlay, preloadState=${preloadData.state}, isTransitioning=$_isTransitioning');
+// ✅ OVERLAY : Uniquement avant bootstrap (première catégorie)
+    final shouldShowOverlay = selectedCity != null && (_isTransitioning || (
+        isCategoryTab
+            ? !_categoryBootstrapped  // ✅ Overlay uniquement avant bootstrap
+            : preloadData.state == PreloadState.loading  // City : garde l'ancien comportement
+    ));
 
     return Scaffold(
       body: Stack(
         children: [
-          // ⚡️ TOUJOURS construire la page cible (wrappers montent immédiatement)
+          // ⚡️ Pages construites immédiatement (injection sous overlay)
           PageTransitionSwitcher(
             duration: const Duration(milliseconds: 200),
             transitionBuilder: (child, animation, secondaryAnimation) {
@@ -101,17 +107,17 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             },
             child: KeyedSubtree(
               key: ValueKey(_currentTab),
-              child: _getPageForTab(_currentTab), // CityPage/CategoryPage construites immédiatement
+              child: _getPageForTab(_currentTab),
             ),
           ),
 
-          // 🔵 OVERLAY avec fade-out élégant
+          // 🔵 Overlay avec fade-out élégant
           if (shouldShowOverlay)
             Positioned.fill(
               child: AnimatedOpacity(
                 opacity: _overlayOpacity,
-                duration: const Duration(milliseconds: 250), // ✅ Fade fluide 250ms
-                curve: Curves.easeOutCubic, // ✅ Courbe élégante
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
                 child: Container(
                   color: Theme.of(context).colorScheme.primary,
                   child: Center(
@@ -129,9 +135,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          'Préparation des expériences',
-                          style: TextStyle(
+                        Text(
+                          _getLoadingSubtitle(),
+                          style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 14,
                           ),
@@ -155,11 +161,12 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     );
   }
 
-  /// ✅ Déclenche le preload avec le bon targetPageType
+  /// ✅ Déclenche preload selon le type de page
   void _triggerPreload(City city) {
     try {
       final targetPageType = _currentTab == BottomNavTab.visiter ? 'city' : 'category';
 
+      // ✅ Garde anti-doublon
       if (_lastPreloadCity?.id == city.id && _lastPreloadTarget == targetPageType) {
         print('⚠️ PRELOAD SKIP: Déjà lancé pour ${city.cityName} ($targetPageType)');
         return;
@@ -168,21 +175,129 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       _lastPreloadCity = city;
       _lastPreloadTarget = targetPageType;
 
-      // ✅ NOUVEAU : Reset opacité pour nouveau preload
+      // ✅ Reset overlay
       setState(() {
         _overlayOpacity = 1.0;
       });
 
-      print('🚀 TRIGGER PRELOAD: ${city.cityName} pour $targetPageType');
-      ref.read(preloadControllerProvider.notifier).startPreload(city, targetPageType);
+      print('🚀 TRIGGER PRELOAD: ${city.cityName} → $targetPageType');
+
+      // ✅ API simplifiée selon type
+      if (targetPageType == 'city') {
+        ref.read(preloadControllerProvider.notifier).startPreload(city, 'city');
+      } else {
+        // ✅ CategoryPage : utiliser API standard avec fallback
+        _triggerCategoryPreload(city);
+      }
 
     } catch (e) {
-      print('❌ TRIGGER: Erreur preload $e');
+      print('❌ TRIGGER PRELOAD: Erreur $e');
+      // Fallback : pas d'overlay si erreur
+      setState(() {
+        _isTransitioning = false;
+        _overlayOpacity = 1.0;
+      });
     }
   }
 
+  /// Preload CategoryPage avec gestion bootstrap
+  void _triggerCategoryPreload(City city) async {
+    try {
+      final selectedCategory = ref.read(selectedCategoryProvider);
 
-  /// Retourne la page correspondant au tab
+      if (!_categoryBootstrapped) {
+        // ✅ PREMIÈRE CATÉGORIE : Preload bloquant avec overlay
+        if (selectedCategory != null) {
+          print('🚀 BOOTSTRAP CATEGORY: ${selectedCategory.name} (${selectedCategory.id})');
+          await ref.read(preloadControllerProvider.notifier).startPreloadCategory(city, selectedCategory.id);
+        } else {
+          // Fallback première catégorie
+          final categories = await ref.read(categoriesProvider.future);
+          if (categories.isNotEmpty) {
+            print('🚀 BOOTSTRAP FALLBACK: ${categories.first.name}');
+            await ref.read(preloadControllerProvider.notifier).startPreloadCategory(city, categories.first.id);
+          }
+        }
+
+        // ✅ Marquer comme bootstrappé
+        setState(() {
+          _categoryBootstrapped = true;
+        });
+
+        // ✅ WARM suivantes en arrière-plan après bootstrap
+        _warmNextCategoriesInBackground(city);
+
+      } else {
+        // ✅ CATÉGORIES SUIVANTES : Warm silencieux (pas d'overlay)
+        if (selectedCategory != null) {
+          print('🔥 WARM CATEGORY: ${selectedCategory.name} (silencieux)');
+          ref.read(preloadControllerProvider.notifier).warmCategorySilently(city, selectedCategory.id);
+        }
+      }
+
+    } catch (e) {
+      print('❌ CATEGORY PRELOAD: Erreur $e');
+      // Fallback : marquer comme bootstrappé pour éviter blocage
+      setState(() {
+        _categoryBootstrapped = true;
+      });
+    }
+  }
+
+  /// ✅ Préchauffe les headers des catégories voisines en arrière-plan
+  void _warmNextCategoriesInBackground(City city) async {
+    try {
+      // Récupérer toutes les catégories
+      final categories = await ref.read(categoriesProvider.future);
+      final selectedCategory = ref.read(selectedCategoryProvider);
+
+      if (categories.length <= 1 || selectedCategory == null) return;
+
+      // Trouver les autres catégories (exclure la courante)
+      final otherCategoryIds = categories
+          .where((c) => c.id != selectedCategory.id)
+          .take(7)
+          .map((c) => c.id)
+          .toList();
+
+      if (otherCategoryIds.isEmpty) return;
+
+      print('🔥 WARM HEADERS BACKGROUND: ${otherCategoryIds.length} catégories');
+
+      // ✅ NOUVEAU : Warm headers au lieu des carrousels complets
+      final ctrl = ref.read(preloadControllerProvider.notifier);
+      await ctrl.warmCategoryHeadersSilently(city, otherCategoryIds);
+
+      // ✅ NOUVEAU : Precaching des covers
+      if (mounted) {
+        final preloadData = ref.read(preloadControllerProvider);
+        final coverUrls = preloadData.coverUrlsFor(otherCategoryIds);
+
+        print('🖼️ PRECACHING: ${coverUrls.length} covers');
+        for (final categoryId in otherCategoryIds) {
+          final categoryHeader = preloadData.categoryHeaders[categoryId];
+          if (categoryHeader?.coverUrl.isNotEmpty == true) {
+            try {
+              await precacheImage(
+                  ImageProviderFactory.coverProvider(
+                      categoryHeader!.coverUrl, categoryId),
+                  context
+              );
+              print('✅ PRECACHED: ${categoryHeader.coverUrl}');
+            } catch (e) {
+            }
+          }
+        }
+      }
+
+      print('✅ WARM HEADERS BACKGROUND: Terminé');
+
+    } catch (e) {
+      print('❌ WARM HEADERS BACKGROUND: Erreur $e');
+    }
+  }
+
+  /// Pages selon tab
   Widget _getPageForTab(BottomNavTab tab) {
     switch (tab) {
       case BottomNavTab.explorer:
@@ -200,26 +315,52 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     }
   }
 
-  /// ✅ Lever overlay avec fade élégant
+  /// ✅ Sous-titre adaptatif selon le tab
+  String _getLoadingSubtitle() {
+    return _currentTab == BottomNavTab.visiter
+        ? 'Préparation des expériences'
+        : 'Chargement de la catégorie';
+  }
+
+  /// ✅ Animation fade-out overlay AVEC précache images critiques
   void _onPreloadBecameReady() {
     setState(() {
       _isTransitioning = true;
     });
 
-    // ⚡️ Attendre une frame pour que l'injection soit garantie
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        print('🎨 FADE OUT: Démarrage animation overlay');
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      print('🎨 FADE OUT: Animation overlay');
 
-        // ✅ FADE OUT : Animer l'opacité vers 0
+      // ✅ 1) Précache images critiques AVANT retrait overlay
+      final preloadData = ref.read(preloadControllerProvider);
+      await _precacheFirstBatchImages(context, preloadData.criticalImageUrls);
+
+      // ✅ 2) Précache cover catégorie courante
+      final selectedCategory = ref.read(selectedCategoryProvider);
+      final categoryHeader = preloadData.categoryHeaders[selectedCategory?.id ?? ''];
+      if (categoryHeader?.coverUrl.isNotEmpty == true) {
+        try {
+          await precacheImage(
+              ImageProviderFactory.coverProvider(categoryHeader!.coverUrl, selectedCategory!.id),
+              context
+          );
+          print('🖼️ PRECACHED CURRENT COVER: ${categoryHeader.coverUrl}');
+        } catch (e) {
+          print('⚠️ PRECACHE CURRENT COVER FAILED: $e');
+        }
+      }
+
+      // ✅ 3) Retirer overlay SEULEMENT après précache
+      if (mounted) {
         setState(() {
           _overlayOpacity = 0.0;
         });
 
-        // ✅ SUPPRIMER après animation (250ms)
+        // Supprimer overlay après animation
         Future.delayed(const Duration(milliseconds: 250), () {
           if (mounted) {
-            print('🚀 OVERLAY REMOVED: Animation terminée');
+            print('🚀 OVERLAY REMOVED: Page révélée');
             setState(() {
               _isTransitioning = false;
               _overlayOpacity = 1.0; // Reset pour prochaine fois
@@ -228,6 +369,20 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         });
       }
     });
+  }
+
+  /// ✅ Helper : Précache lot d'images critiques (max 24)
+  Future<void> _precacheFirstBatchImages(BuildContext ctx, List<String> urls, {int max = 24}) async {
+    print('🖼️ PRECACHING T0: ${urls.take(max).length} images critiques');
+    for (final url in urls.take(max)) {
+      try {
+        await precacheImage(ImageProviderFactory.thumbnailProvider(url), ctx);
+        print('✅ PRECACHED T0: $url');
+      } catch (e) {
+        print('⚠️ PRECACHE T0 FAILED: $url - $e');
+      }
+    }
+    print('✅ PRECACHING T0: Terminé');
   }
 
 }

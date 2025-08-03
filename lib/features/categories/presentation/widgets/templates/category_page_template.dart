@@ -10,9 +10,10 @@ import '../../../../../core/theme/components/organisms/app_header.dart';
 import '../../../../../core/domain/models/shared/category_view_model.dart';
 import '../../../../../core/domain/models/shared/subcategory_model.dart';
 import '../../../../../core/domain/models/activity/search/searchable_activity.dart';
-import '../../../../shared_ui/presentation/widgets/organisms/generic_bottom_bar.dart';
+import '../../../../../core/common/utils/image_provider_factory.dart';
 import '../../../../search/application/state/city_selection_state.dart';
 import '../../../application/state/subcategories_provider.dart';
+import '../../../../preload/application/preload_providers.dart';
 import '../../controllers/cover_controller.dart';
 import '../atoms/subcategory_tab.dart';
 import '../delegates/subcategory_tabs_delegate.dart';
@@ -97,7 +98,20 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.currentCategory.id != widget.currentCategory.id) {
-      coverController.updateCategory(widget.currentCategory);
+      // ✅ HEADER INSTANTANÉ avec preload lors changement catégorie
+      final preloadData = ref.read(preloadControllerProvider);
+      final categoryHeader = preloadData.categoryHeaders[widget.currentCategory.id];
+
+      // Utiliser header préchaché ou fallback
+      final displayTitle = categoryHeader?.title ?? widget.currentCategory.name;
+      final displayCoverUrl = categoryHeader?.coverUrl ?? widget.currentCategory.imageUrl;
+
+      // ✅ Mettre à jour avec données préchargées
+      coverController.updateCategoryWithPreload(
+        widget.currentCategory,
+        preloadTitle: displayTitle,
+        preloadCoverUrl: displayCoverUrl,
+      );
 
       // S'assurer que les clés des catégories sont mises à jour si la liste a changé
       if (oldWidget.allCategories.length != widget.allCategories.length) {
@@ -107,6 +121,44 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
         );
       }
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // ✅ PROTECTION : Toujours créer le delegate
+    try {
+      // ✅ HEADER INSTANTANÉ avec preload
+      final preloadData = ref.read(preloadControllerProvider);
+      final categoryHeader = preloadData.categoryHeaders[widget.currentCategory.id];
+
+      // Utiliser header préchaché ou fallback
+      final displayTitle = categoryHeader?.title ?? widget.currentCategory.name;
+      final displayCoverUrl = categoryHeader?.coverUrl ?? widget.currentCategory.imageUrl;
+
+      // ✅ Mettre à jour le controller avec les données préchargées
+      coverController.updateCategoryWithPreload(
+        widget.currentCategory,
+        preloadTitle: displayTitle,
+        preloadCoverUrl: displayCoverUrl,
+      );
+
+    } catch (e) {
+      print('⚠️ PRELOAD HEADER: Erreur récupération, fallback vers données normales: $e');
+      // Continue avec les données normales si preload échoue
+    }
+
+    // ✅ TOUJOURS créer le delegate (même en cas d'erreur preload)
+    _coverDelegate = CategoryCoverWithTabsDelegate(
+      controller: coverController,
+      categories: widget.allCategories,
+      onCategorySelected: _handleCategoryChange,
+      screenHeight: MediaQuery.of(context).size.height,
+      tabScrollController: _tabScrollController,
+      tabKeys: _categoryTabKeys,
+      contextRef: context,
+    );
   }
 
   // Ajouter une méthode de centrage
@@ -142,26 +194,6 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
     });
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-
-    // Créer le delegate seulement s'il n'existe pas encore ou si un changement pertinent est survenu
-    if (_coverDelegate == null) {
-      _coverDelegate = CategoryCoverWithTabsDelegate(
-        controller: coverController,
-        categories: widget.allCategories,
-        onCategorySelected: _handleCategoryChange,
-        screenHeight: MediaQuery
-            .of(context)
-            .size
-            .height,
-        tabScrollController: _tabScrollController,
-        tabKeys: _categoryTabKeys,
-        contextRef: context,
-      );
-    }
-  }
 
   // Méthode pour mettre à jour le TabController quand les sous-catégories changent
   void _updateTabController(List<Subcategory> subcategories,
@@ -192,22 +224,46 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
     }
   }
 
-  void _handleCategoryChange(CategoryViewModel category, int index) {
+  void _handleCategoryChange(CategoryViewModel category, int index) async {
     // Marquer l'animation comme active
     setState(() {
       _isAnimating = true;
       _previousCategory = widget.currentCategory;
     });
 
-    // Informer le parent
+    // ✅ 1) Récupérer header préchargé ou fallback
+    final preloadData = ref.read(preloadControllerProvider);
+    final categoryHeader = preloadData.categoryHeaders[category.id];
+    final nextTitle = categoryHeader?.title ?? category.name;
+    final nextCover = categoryHeader?.coverUrl ?? category.imageUrl;
+
+    // ✅ 2) Précache cover AVANT de switcher (zéro flash)
+    if (nextCover.isNotEmpty) {
+      try {
+        await precacheImage(
+            ImageProviderFactory.coverProvider(nextCover, category.id),
+            context
+        );        print('🖼️ PRECACHED SWITCH COVER: $nextCover');
+      } catch (e) {
+        print('⚠️ PRECACHE SWITCH COVER FAILED: $nextCover - $e');
+      }
+    }
+
+    // ✅ 3) Mise à jour UI instantanée (cover déjà décodée)
+    coverController.updateCategoryWithPreload(
+      category,
+      preloadTitle: nextTitle,
+      preloadCoverUrl: nextCover,
+    );
+
+    // 4) Notifier le parent
     widget.onCategorySelected(category);
 
-    // Centrer la catégorie
+    // 5) Centrer la catégorie
     _centerCategoryTab(index);
 
-    // Uniquement conserver la gestion de fin d'animation
+    // 6) Fin d'animation inchangée
     Future.delayed(AppInteractions.categoryContentFadeDelay, () {
-      // Marquer l'animation comme terminée après un délai
       Future.delayed(AppInteractions.categoryFadeDuration, () {
         if (mounted) {
           setState(() {
@@ -218,7 +274,6 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
       });
     });
   }
-
 
   @override
   Widget build(BuildContext context) {

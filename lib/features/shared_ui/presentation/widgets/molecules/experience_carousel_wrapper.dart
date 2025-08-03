@@ -1,21 +1,31 @@
-// lib/shared_ui/presentation/widgets/molecules/experience_carousel_wrapper.dart
+// lib/features/shared_ui/presentation/widgets/molecules/experience_carousel_wrapper.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../preload/application/pagination_controller.dart';
 import '../../../../../core/domain/models/shared/experience_item.dart';
 import '../../../../preload/application/preload_providers.dart';
 import '../../../../preload/application/preload_controller.dart';
+import '../../../../categories/application/state/categories_provider.dart';
+import '../../../../../core/domain/models/shared/category_model.dart';
 import '../organisms/generic_experience_carousel.dart';
 
-/// Wrapper stateful unifié pour tous les carrousels avec pagination
-/// Centralise la logique T1/T2 commune à CityPage et CategoryPage
+
+// lib/shared_ui/presentation/widgets/molecules/experience_carousel_wrapper.dart
+
+// ✅ 1. ENUM pour contexte carrousel (remplace toString() fragile)
+enum CarouselContext { city, categoryFeatured, categorySub }
+
 class ExperienceCarouselWrapper extends ConsumerStatefulWidget {
   /// Provider de pagination (supporte AutoDispose et normal)
   final dynamic paginationProvider;
 
   /// Paramètres uniques pour identifier le carrousel dans le provider
   final dynamic providerParams;
+
+  /// Context du carrousel pour calcul clé preload
+  final CarouselContext carouselContext;
 
   /// Titre du carrousel
   final String title;
@@ -39,6 +49,7 @@ class ExperienceCarouselWrapper extends ConsumerStatefulWidget {
     Key? key,
     required this.paginationProvider,
     required this.providerParams,
+    required this.carouselContext, // ✅ NOUVEAU
     required this.title,
     required this.heroPrefix,
     this.openBuilder,
@@ -49,7 +60,6 @@ class ExperienceCarouselWrapper extends ConsumerStatefulWidget {
 
   @override
   ConsumerState<ExperienceCarouselWrapper> createState() => _ExperienceCarouselWrapperState();
-
 }
 
 class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWrapper> {
@@ -59,57 +69,38 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
   void initState() {
     super.initState();
 
+    // ✅ REF.LISTEN dans initState avec listenManual (une seule fois)
+    if (widget.carouselContext != CarouselContext.city) {
+      // Utiliser listenManual pour éviter les problèmes de cycle de vie
+      ref.listenManual(selectedCategoryProvider, (previous, next) {
+        // ✅ Vérification de type explicite
+        if (previous is Category? && next is Category?) {
+          if (previous?.id != next?.id) {
+            print('🔄 WRAPPER CATEGORY CHANGE: ${widget.title} - re-injection needed');
+
+            // Force re-injection après changement catégorie
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _attemptPreloadInjection();
+              }
+            });
+          }
+        }
+      });
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && !_hasInitialized) {
         _hasInitialized = true;
-
-        try {
-          final controller = ref.read(widget.paginationProvider(widget.providerParams).notifier);
-          final currentState = ref.read(widget.paginationProvider(widget.providerParams));
-
-          // ✅ PRIORITÉ 1 : Données préchargées
-          final preloadedData = _getPreloadedData();
-          if (preloadedData?.isNotEmpty == true) {
-            print('🚀 WRAPPER PRELOAD INJECTION: ${widget.title} avec ${preloadedData!.length} items');
-
-            // Déterminer si partiel selon le plan différentiel
-            final isPartial = _isPreloadPartial(preloadedData);
-
-            controller.state = currentState.copyWith(
-              items: preloadedData,
-              isPartial: isPartial,
-              currentOffset: preloadedData.length,
-              hasMore: true,
-              isLoading: false,
-            );
-            return; // ✅ SORTIE : Pas besoin de fallback
-          }
-
-          // ✅ PRIORITÉ 2 : Fallback données existantes
-          if (widget.fallbackExperiences?.isNotEmpty == true) {
-            print('🔄 WRAPPER FALLBACK INJECTION: ${widget.title} avec ${widget.fallbackExperiences!.length} items');
-
-            controller.state = currentState.copyWith(
-              items: widget.fallbackExperiences!,
-              isPartial: widget.fallbackExperiences!.length <= 10,
-              currentOffset: widget.fallbackExperiences!.length,
-              hasMore: true,
-              isLoading: false,
-            );
-            return; // ✅ SORTIE : Pas besoin de loadPreload
-          }
-
-          // ✅ PRIORITÉ 3 : LoadPreload classique (dernier recours)
-          if (currentState.items.isEmpty && !currentState.isLoading) {
-            print('🚀 WRAPPER PAGINATION INIT: ${widget.title}');
-            controller.loadPreload();
-          }
-
-        } catch (e) {
-          print('❌ WRAPPER INIT: Erreur ${widget.title}: $e');
-        }
+        _attemptPreloadInjection();
       }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // ✅ SUPPRIMÉ : Plus de ref.listen ici
   }
 
   @override
@@ -185,6 +176,59 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
     }
   }
 
+  /// ✅ NOUVELLE méthode centralisée pour injection preload
+  void _attemptPreloadInjection() {
+    try {
+      final controller = ref.read(widget.paginationProvider(widget.providerParams).notifier);
+      final currentState = ref.read(widget.paginationProvider(widget.providerParams));
+
+      print('🔍 WRAPPER INJECTION ATTEMPT: ${widget.title}');
+      print('  - currentState.items.length: ${currentState.items.length}');
+      print('  - currentState.isLoading: ${currentState.isLoading}');
+
+      // ✅ PRIORITÉ 1 : Données préchargées
+      final preloadedData = _getPreloadedData();
+      if (preloadedData?.isNotEmpty == true) {
+        print('🚀 WRAPPER PRELOAD INJECTION: ${widget.title} avec ${preloadedData!.length} items');
+
+        // Déterminer si partiel selon le plan différentiel
+        final isPartial = _isPreloadPartial(preloadedData);
+
+        controller.state = currentState.copyWith(
+          items: preloadedData,
+          isPartial: isPartial,
+          currentOffset: preloadedData.length,
+          hasMore: true,
+          isLoading: false,
+        );
+        return; // ✅ SORTIE : Pas besoin de fallback
+      }
+
+      // ✅ PRIORITÉ 2 : Fallback données existantes
+      if (widget.fallbackExperiences?.isNotEmpty == true) {
+        print('🔄 WRAPPER FALLBACK INJECTION: ${widget.title} avec ${widget.fallbackExperiences!.length} items');
+
+        controller.state = currentState.copyWith(
+          items: widget.fallbackExperiences!,
+          isPartial: widget.fallbackExperiences!.length <= 10,
+          currentOffset: widget.fallbackExperiences!.length,
+          hasMore: true,
+          isLoading: false,
+        );
+        return; // ✅ SORTIE : Pas besoin de loadPreload
+      }
+
+      // ✅ PRIORITÉ 3 : LoadPreload classique (dernier recours)
+      if (currentState.items.isEmpty && !currentState.isLoading) {
+        print('🚀 WRAPPER PAGINATION INIT: ${widget.title}');
+        controller.loadPreload();
+      }
+
+    } catch (e) {
+      print('❌ WRAPPER INIT: Erreur ${widget.title}: $e');
+    }
+  }
+
   /// ✅ T2 LAZY LOADING (pattern unifié)
   void _loadMoreExperiences() {
     try {
@@ -208,49 +252,66 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
     }
   }
 
+  /// ✅ 3. HELPER UNIFIÉ pour calcul clé (même logique que PreloadController)
+  String _buildCarouselKey(dynamic params) {
+    switch (widget.carouselContext) {
+      case CarouselContext.city:
+      // Format : categoryId_sectionId
+        return '${params.categoryId}_${params.sectionId}';
+
+      case CarouselContext.categoryFeatured:
+      // Format : cat:categoryId:featured:sectionId
+        return 'cat:${params.categoryId}:featured:${params.sectionId}';
+
+      case CarouselContext.categorySub:
+      // Format : cat:categoryId:sub:subcategoryId:sectionId
+        return 'cat:${params.categoryId}:sub:${params.subcategoryId}:${params.sectionId}';
+    }
+  }
+
   /// Récupère les données préchargées depuis PreloadController si disponibles
   List<ExperienceItem>? _getPreloadedData() {
     try {
       final preloadData = ref.read(preloadControllerProvider);
 
-      // Vérifier si preload terminé
-      if (preloadData.state != PreloadState.ready || preloadData.carouselData.isEmpty) {
-        print('🔍 WRAPPER DEBUG: preload state=${preloadData.state}, carouselData.length=${preloadData.carouselData.length}');
+      print('🔍 WRAPPER DEBUG DETAILED: ${widget.title}');
+      print('  - preload state: ${preloadData.state}');
+      print('  - carouselData.length: ${preloadData.carouselData.length}');
+      print('  - context: ${widget.carouselContext}');
+
+      // ✅ 1. SUPPRESSION garde bloquante globale (sauf CityPage si nécessaire)
+      final isCity = widget.carouselContext == CarouselContext.city;
+      if (isCity && preloadData.state != PreloadState.ready) {
+        print('🔍 WRAPPER DEBUG: City preload not ready - state=${preloadData.state}');
         return null;
       }
 
-      // Construire la clé selon le type de provider
-      String carouselKey;
-
-      // Pour CityPage : categoryId_sectionId
-      if (widget.paginationProvider.toString().contains('cityActivitiesPagination')) {
-        final params = widget.providerParams as dynamic; // CityCarouselParams
-        carouselKey = '${params.categoryId}_${params.sectionId}';
-        print('🔍 WRAPPER DEBUG CITY: cherche clé "$carouselKey" pour ${widget.title}');
-      }
-      // Pour CategoryPage : categoryId_sectionId (même format)
-      else {
-        final params = widget.providerParams as dynamic; // CategoryCarouselParams
-        carouselKey = '${params.categoryId}_${params.sectionId}';
-        print('🔍 WRAPPER DEBUG CATEGORY: cherche clé "$carouselKey" pour ${widget.title}');
+      // Vérifier si données vides
+      if (preloadData.carouselData.isEmpty) {
+        print('🔍 WRAPPER DEBUG: carouselData is empty');
+        return null;
       }
 
-      // ✅ NOUVEAU : Afficher toutes les clés disponibles pour debug
+      // ✅ UTILISER helper unifié pour clé
+      final carouselKey = _buildCarouselKey(widget.providerParams);
+      print('🔍 WRAPPER DEBUG: cherche clé "$carouselKey" pour ${widget.title}');
+
+      // ✅ AFFICHER toutes les clés disponibles pour debug AVEC DETAILS
       print('🔍 WRAPPER DEBUG: clés disponibles dans preload:');
       preloadData.carouselData.forEach((key, items) {
-        print('  - "$key": ${items.length} items');
+        final match = key == carouselKey ? " ⭐ MATCH!" : "";
+        print('  - "$key": ${items.length} items$match');
       });
 
       final preloadedItems = preloadData.carouselData[carouselKey];
 
       if (preloadedItems?.isNotEmpty == true) {
-        print('🎯 WRAPPER PRELOAD INJECTION: ${widget.title} avec ${preloadedItems!.length} items préchargés');
+        print('🎯 WRAPPER PRELOAD INJECTION SUCCESS: ${widget.title} avec ${preloadedItems!.length} items préchargés');
         return preloadedItems;
       } else {
-        print('🔍 WRAPPER DEBUG: aucun item pour clé "$carouselKey" (${widget.title})');
+        print('🔍 WRAPPER DEBUG FAIL: aucun item pour clé "$carouselKey" (${widget.title}) - carouselData has ${preloadData.carouselData.keys.length} keys');
+        return null;
       }
-
-      return null;
 
     } catch (e) {
       print('❌ WRAPPER PRELOAD: Erreur récupération ${widget.title}: $e');
@@ -273,5 +334,4 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
       return false; // Plus de 10 items = complet
     }
   }
-
 }

@@ -9,7 +9,9 @@ import '../../../../../core/domain/models/shared/category_view_model.dart';
 import '../../../../../core/domain/ports/providers/search/category_covers_provider.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_interactions.dart';
+import '../../../../../core/common/utils/image_provider_factory.dart';
 import '../../constants/ui_constants.dart';
+import '../../controllers/cover_controller.dart';
 
 /// Délégué pour l'affichage de la couverture de catégorie avec comportement de défilement
 class CategoryCoverDelegate extends SliverPersistentHeaderDelegate {
@@ -18,6 +20,7 @@ class CategoryCoverDelegate extends SliverPersistentHeaderDelegate {
   final bool isAnimating;
   final Function(bool)? onAnimationStateChanged;
   final BuildContext? contextRef;
+  final CoverController controller;
 
   // Pour le précachage des images
   CancelableOperation<void>? _precacheOperation;
@@ -31,6 +34,7 @@ class CategoryCoverDelegate extends SliverPersistentHeaderDelegate {
     this.onAnimationStateChanged,
     required double screenHeight,
     this.contextRef,
+    required this.controller,
   }) : _maxExtent = screenHeight * CategoryUIConstants.coverHeight {
     // Debug : log la hauteur maximale attendue
   }
@@ -56,110 +60,48 @@ class CategoryCoverDelegate extends SliverPersistentHeaderDelegate {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Image de fond avec animation de transition
+          // ✅ Image de fond avec displayCoverUrl (déjà précachée)
           Positioned.fill(
-            child: AnimatedSwitcher(
-              duration: AppInteractions.categoryFadeDuration,
-              child: Consumer(
-                builder: (context, ref, _) {
-                  // Observer l'URL de couverture optimale pour la catégorie
-                  final coverUrlAsync = ref.watch(
-                      categoryDepartmentCoverProvider(category)
-                  );
-
-                  return coverUrlAsync.when(
-                    data: (coverUrl) {
-                      // La nouvelle URL a été chargée avec succès
-                      return Container(
-                        key: ValueKey<String>("${category.id}_$coverUrl"),
-                        width: double.infinity,
-                        height: double.infinity,
-                        child: CachedNetworkImage(
-                          imageUrl: coverUrl,
-                          fit: BoxFit.cover,
-                          cacheKey: 'category_cover_${category.id}_$coverUrl',
-                          fadeInDuration: AppInteractions.categoryFadeDuration,
-                          placeholder: (context, url) => Container(
-                            color: Theme.of(context).colorScheme.surfaceVariant,
-                          ),
-                          errorWidget: (context, url, error) => Container(
-                            color: Theme.of(context).colorScheme.surfaceVariant,
-                            child: Center(
-                              child: Icon(
-                                Icons.image_not_supported,
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                    loading: () => Container(
-                      key: ValueKey<String>(category.id),
-                      width: double.infinity,
-                      height: double.infinity,
-                      child: CachedNetworkImage(
-                        imageUrl: category.imageUrl,
-                        fit: BoxFit.cover,
-                        cacheKey: 'category_cover_${category.id}',
-                        fadeInDuration: AppInteractions.categoryFadeDuration,
-                        placeholder: (context, url) => Container(
-                          color: Theme.of(context).colorScheme.surfaceVariant,
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          color: Theme.of(context).colorScheme.surfaceVariant,
-                          child: Center(
-                            child: Icon(
-                              Icons.image_not_supported,
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ),
-                        ),
-                      ),
+            child: Container(
+              key: ValueKey<String>("${category.id}_${controller.displayCoverUrl}"),
+              width: double.infinity,
+              height: double.infinity,
+              child: CachedNetworkImage(
+                imageUrl: controller.displayCoverUrl, // ✅ URL déjà précachée
+                fit: BoxFit.cover,
+                cacheKey: 'category_cover_${category.id}_${controller.displayCoverUrl}',
+                fadeInDuration: Duration.zero, // ✅ PAS d'animation (instantané si en cache)
+                placeholder: (context, url) => Container(
+                  color: Theme.of(context).colorScheme.surfaceVariant,
+                ),
+                errorWidget: (context, url, error) => Container(
+                  color: Theme.of(context).colorScheme.surfaceVariant,
+                  child: Center(
+                    child: Icon(
+                      Icons.image_not_supported,
+                      color: Theme.of(context).colorScheme.error,
                     ),
-                    error: (_, __) => Container(
-                      key: ValueKey<String>(category.id),
-                      width: double.infinity,
-                      height: double.infinity,
-                      child: CachedNetworkImage(
-                        imageUrl: category.imageUrl,
-                        fit: BoxFit.cover,
-                        cacheKey: 'category_cover_${category.id}',
-                        fadeInDuration: AppInteractions.categoryFadeDuration,
-                        placeholder: (context, url) => Container(
-                          color: Theme.of(context).colorScheme.surfaceVariant,
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          color: Theme.of(context).colorScheme.surfaceVariant,
-                          child: Center(
-                            child: Icon(
-                              Icons.image_not_supported,
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
+                  ),
+                ),
               ),
             ),
           ),
+
+          // Gradient du haut (inchangé)
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            height: 100, // Hauteur fixe de 100px
+            height: 100,
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    // Même bleu que le dégradé du bas
-                    AppColors.blueBackground.withOpacity(0.6), // Plus opaque en haut
-                    AppColors.blueBackground.withOpacity(0.3), // Semi-opaque au milieu
-                    Colors.transparent, // Complètement transparent en bas
+                    AppColors.blueBackground.withOpacity(0.6),
+                    AppColors.blueBackground.withOpacity(0.3),
+                    Colors.transparent,
                   ],
                   stops: const [0.0, 0.5, 1.0],
                 ),
@@ -167,7 +109,7 @@ class CategoryCoverDelegate extends SliverPersistentHeaderDelegate {
             ),
           ),
 
-          // Scrim dynamique pour garantir la lisibilité et le contraste (dégradé du bas)
+          // Scrim dynamique (inchangé)
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
@@ -175,11 +117,8 @@ class CategoryCoverDelegate extends SliverPersistentHeaderDelegate {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    // Stop 0 : transparent pour laisser voir l'image en haut
                     Colors.transparent,
-                    // Stop 1 : bleu à opacité dynamique
                     AppColors.blueBackground.withOpacity(scrimOpacity),
-                    // Stop 2 : même bleu, opacité augmentée de +0.3 (clamp pour rester entre 0 et 1)
                     AppColors.blueBackground
                         .withOpacity((scrimOpacity + 0.3).clamp(0.0, 1.0)),
                   ],

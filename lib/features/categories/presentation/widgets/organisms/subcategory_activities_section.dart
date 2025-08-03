@@ -85,6 +85,7 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
                 key: ValueKey('subcategory_unified_${currentCategory?.id}_${selectedSubcategory.id}_${section.id}'),
                 paginationProvider: categorySubcategoryPaginationProvider,
                 providerParams: params,
+                carouselContext: CarouselContext.categorySub,
                 title: section.title,
                 heroPrefix: 'subcategory-${currentCategory?.id}-${selectedSubcategory.id}-${section.id}',
                 openBuilder: _buildOpenBuilder(),

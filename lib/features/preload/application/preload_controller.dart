@@ -7,10 +7,19 @@ import '../../../core/domain/models/shared/experience_item.dart';
 import '../../../core/domain/ports/providers/search/activity_distance_manager_providers.dart';
 import '../../search/application/state/activity_providers.dart';
 import '../../search/application/state/event_providers.dart';
-import '../../search/application/state/section_discovery_providers.dart';
 import '../../categories/application/state/categories_provider.dart';
-import '../../../features/search/application/state/experience_providers.dart';
+import '../../categories/application/state/subcategories_provider.dart';
 
+/// Header minimal pour affichage instantané des catégories
+final class CategoryHeader {
+  final String title;
+  final String coverUrl;
+
+  const CategoryHeader({
+    required this.title,
+    required this.coverUrl,
+  });
+}
 
 enum PreloadState { idle, loading, ready }
 
@@ -19,14 +28,16 @@ class PreloadData {
   final String? error;
   final List<String> criticalImageUrls;
   final List<CarouselLoadInfo> carouselsInfo;
-  final Map<String, List<ExperienceItem>> carouselData; // ✅ NOUVEAU
+  final Map<String, List<ExperienceItem>> carouselData;
+  final Map<String, CategoryHeader> categoryHeaders; // ✅ NOUVEAU
 
   const PreloadData({
     required this.state,
     this.error,
     this.criticalImageUrls = const [],
     this.carouselsInfo = const [],
-    this.carouselData = const {}, // ✅ NOUVEAU
+    this.carouselData = const {},
+    this.categoryHeaders = const {}, // ✅ NOUVEAU
   });
 
   PreloadData copyWith({
@@ -35,6 +46,7 @@ class PreloadData {
     List<String>? criticalImageUrls,
     List<CarouselLoadInfo>? carouselsInfo,
     Map<String, List<ExperienceItem>>? carouselData,
+    Map<String, CategoryHeader>? categoryHeaders, // ✅ NOUVEAU
   }) {
     return PreloadData(
       state: state ?? this.state,
@@ -42,6 +54,7 @@ class PreloadData {
       criticalImageUrls: criticalImageUrls ?? this.criticalImageUrls,
       carouselsInfo: carouselsInfo ?? this.carouselsInfo,
       carouselData: carouselData ?? this.carouselData,
+      categoryHeaders: categoryHeaders ?? this.categoryHeaders, // ✅ NOUVEAU
     );
   }
 }
@@ -69,20 +82,19 @@ class PreloadController extends StateNotifier<PreloadData> {
 
   PreloadController(this.ref) : super(const PreloadData(state: PreloadState.idle));
 
-  /// Démarre le préchargement pour une ville et page cible
+  /// ✅ API PRINCIPALE : Préchargement selon type de page
   Future<void> startPreload(City city, String targetPageType) async {
     print('🚀 PRELOAD: Démarrage pour ${city.cityName}, page: $targetPageType');
 
     state = state.copyWith(state: PreloadState.loading);
 
     try {
-      // Gérer selon le type de page cible
       if (targetPageType == 'city') {
         await _preloadCityPage(city);
       } else if (targetPageType == 'category') {
-        await _preloadCategoryPage(city);  // ✅ NOUVEAU
+        // ✅ CORRECTION : Trouver la catégorie active et utiliser l'API spécialisée
+        await _preloadCategoryGeneric(city);
       }
-      // TODO: Ajouter d'autres types si nécessaire
 
       state = state.copyWith(state: PreloadState.ready);
       print('✅ PRELOAD: Terminé avec succès');
@@ -90,103 +102,62 @@ class PreloadController extends StateNotifier<PreloadData> {
     } catch (e) {
       print('❌ PRELOAD: Erreur: $e');
       state = state.copyWith(
-        state: PreloadState.ready, // On continue quand même
+        state: PreloadState.ready, // Fail-open
         error: e.toString(),
       );
     }
   }
 
-  /// Charge les vraies données d'un carrousel avec cache des distances
-  Future<List<ExperienceItem>> _loadCarouselData(
-      City city,
-      Category category,
-      String sectionId,
-      int limit,
-      List<String> imageUrls,
-      ) async {
+  /// Helper : Précharge CategoryPage en trouvant la catégorie active
+  Future<void> _preloadCategoryGeneric(City city) async {
     try {
-      const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
-      final isEvents = category.id == eventsCategoryId;
+      // ✅ NOUVEAU : Trouver la catégorie à précharger
+      String? targetCategoryId;
 
-      // ✅ NOUVEAU : Logs de debug pour les événements
-      print('🔍 PRELOAD DATA DEBUG: ${category.name} (id: ${category.id})');
-      print('  - isEvents: $isEvents');
-      print('  - city: ${city.cityName} (${city.lat}, ${city.lon})');
-      print('  - sectionId: $sectionId');
-      print('  - limit: $limit');
-
-      List<ExperienceItem> items;
-
-      if (isEvents) {
-        print('🔍 PRELOAD EVENTS: Appel getEventsUseCaseProvider...');
-
-        final events = await ref.read(getEventsUseCaseProvider).execute(
-          latitude: city.lat,
-          longitude: city.lon,
-          sectionId: sectionId,
-          categoryId: category.id,
-          limit: limit,
-        );
-
-        print('🔍 PRELOAD EVENTS: Résultat = ${events.length} événements');
-
-        if (events.isNotEmpty) {
-          ref.read(activityDistancesProvider.notifier).cacheActivitiesDistances(
-            events.map((event) => (
-            id: event.base.id,
-            lat: event.base.latitude,
-            lon: event.base.longitude,
-            )).toList(),
-          );
+      // Essayer de récupérer la catégorie sélectionnée (si disponible)
+      try {
+        final categories = await ref.read(categoriesProvider.future);
+        if (categories.isNotEmpty) {
+          // Pour MVP : utiliser la première catégorie
+          targetCategoryId = categories.first.id;
+          print('🎯 PRELOAD CATEGORY GENERIC: Utilisation ${categories.first.name} (${targetCategoryId})');
         }
+      } catch (e) {
+        print('⚠️ PRELOAD CATEGORY: Impossible de récupérer catégories: $e');
+      }
 
-        items = events.map((event) => ExperienceItem.event(event)).toList();
+      // ✅ UTILISER l'API spécialisée
+      if (targetCategoryId != null) {
+        await _preloadSpecificCategoryWithRealSections(targetCategoryId, city);
       } else {
-        print('🔍 PRELOAD ACTIVITIES: Appel getActivitiesUseCaseProvider...');
-
-        final activities = await ref.read(getActivitiesUseCaseProvider).execute(
-          latitude: city.lat,
-          longitude: city.lon,
-          sectionId: sectionId,
-          categoryId: category.id,
-          limit: limit,
-        );
-
-        print('🔍 PRELOAD ACTIVITIES: Résultat = ${activities.length} activités');
-
-        if (activities.isNotEmpty) {
-          ref.read(activityDistancesProvider.notifier).cacheActivitiesDistances(
-            activities.map((activity) => (
-            id: activity.base.id,
-            lat: activity.base.latitude,
-            lon: activity.base.longitude,
-            )).toList(),
-          );
-        }
-
-        items = activities.map((activity) => ExperienceItem.activity(activity)).toList();
+        throw Exception('Aucune catégorie disponible pour preload');
       }
-
-      // Collecter URLs d'images pour précache
-      for (final item in items) {
-        if (item.mainImageUrl?.isNotEmpty == true) {
-          imageUrls.add(item.mainImageUrl!);
-        }
-      }
-
-      print('✅ PRELOAD DATA: ${category.name} → ${items.length} items (limit: $limit)');
-      return items;
 
     } catch (e) {
-      print('❌ PRELOAD DATA: Erreur ${category.name}: $e');
-      return [];
+      print('❌ PRELOAD CATEGORY GENERIC: Erreur: $e');
+      rethrow;
     }
   }
 
-  /// Précharge les vraies données d'une CityPage selon plan différentiel
+  /// ✅ API SPÉCIALISÉE : Préchargement catégorie spécifique
+  Future<void> preloadCategory(String categoryId, City city) async {
+    print('🚀 PRELOAD CATEGORY SPECIFIC: $categoryId pour ${city.cityName}');
+
+    state = state.copyWith(state: PreloadState.loading);
+
+    try {
+      await _preloadSpecificCategory(categoryId, city);
+      state = state.copyWith(state: PreloadState.ready);
+      print('✅ PRELOAD CATEGORY SPECIFIC: Terminé');
+    } catch (e) {
+      print('❌ PRELOAD CATEGORY SPECIFIC: Erreur $e');
+      state = state.copyWith(state: PreloadState.ready); // Fail-open
+    }
+  }
+
+  /// Précharge données CityPage (toutes catégories)
   Future<void> _preloadCityPage(City city) async {
     try {
-      // 1. Récupérer les catégories pour connaître la structure
       final allCategories = await ref.read(categoriesProvider.future);
       if (allCategories.isEmpty) {
         throw Exception('Aucune catégorie disponible');
@@ -204,25 +175,24 @@ class PreloadController extends StateNotifier<PreloadData> {
           ? allCategories.firstWhere((cat) => cat.id == eventsCategoryId)
           : Category(id: eventsCategoryId, name: 'Événements');
 
-      // 2. Construire la liste des tâches à charger
+      // Jobs à charger
       final jobs = <(String sectionId, Category cat, int limit)>[
-        ('7f94df23-ab30-4bf3-afb2-59320e5466a7', eventCategory, 10),                 // événements
+        ('7f94df23-ab30-4bf3-afb2-59320e5466a7', eventCategory, 10), // événements
         ...activityCategories.map((c) => ('5aa09feb-397a-4ad1-8142-7dcf0b2edd0f', c, 10)),
       ];
 
+      final carouselData = <String, List<ExperienceItem>>{...state.carouselData};
+      final imageUrls = <String>[...state.criticalImageUrls];
       final carouselsInfo = <CarouselLoadInfo>[];
-      final carouselData = <String, List<ExperienceItem>>{...state.carouselData}; // ✅ Conserver l'existant
-      final imageUrls = <String>[...state.criticalImageUrls]; // ✅ Conserver l'existant
 
-      // 3. Charger chaque carrousel et stocker immédiatement
+      // Charger séquentiellement (simple)
       for (final (sectionId, category, limit) in jobs) {
         try {
-          print('🔄 PRELOAD JOB: ${category.name} (${category.id}) avec limit=$limit');
+          print('🔄 PRELOAD CITY JOB: ${category.name} (limit=$limit)');
 
           final items = await _loadCarouselData(city, category, sectionId, limit, imageUrls);
           final key = '${category.id}_$sectionId';
 
-          // ✅ STOCKAGE IMMÉDIAT dans carouselData
           if (items.isNotEmpty) {
             carouselData[key] = items;
 
@@ -231,144 +201,480 @@ class PreloadController extends StateNotifier<PreloadData> {
               sectionId: sectionId,
               title: category.name,
               loadedItems: items.length,
-              isPartial: true, // Déclenche T1
+              isPartial: true,
               totalAvailable: 25,
             ));
 
-            print('✅ PRELOAD STORED: "$key" → ${items.length} items');
-          } else {
-            print('⚠️ PRELOAD EMPTY: "$key" → 0 items');
+            print('✅ PRELOAD CITY STORED: "$key" → ${items.length} items');
           }
 
-          // ✅ MISE À JOUR INCRÉMENTALE du state (pour injection immédiate si besoin)
-          state = state.copyWith(
-            carouselData: carouselData,
-            criticalImageUrls: imageUrls,
-          );
+          // Mise à jour incrémentale
+          state = state.copyWith(carouselData: carouselData);
 
         } catch (e) {
-          print('❌ PRELOAD JOB: Erreur ${category.name}: $e');
-          // Continue avec les autres carrousels
+          print('❌ PRELOAD CITY JOB: Erreur ${category.name}: $e');
         }
       }
 
-      // 4. Mise à jour finale du state
+      // Mise à jour finale
       state = state.copyWith(
-        criticalImageUrls: imageUrls,
+        carouselData: carouselData,
         carouselsInfo: carouselsInfo,
-        carouselData: carouselData, // ✅ Toutes les données collectées
+        criticalImageUrls: imageUrls,
       );
 
-      print('✅ PRELOAD CITY: ${carouselsInfo.length} carrousels, ${carouselData.length} datasets, ${imageUrls.length} images');
+      print('✅ PRELOAD CITY: ${carouselsInfo.length} carrousels, ${carouselData.length} datasets');
 
     } catch (e) {
-      print('❌ PRELOAD: Erreur _preloadCityPage: $e');
+      print('❌ PRELOAD CITY: Erreur: $e');
       rethrow;
     }
   }
 
-  /// Précharge les métadonnées d'une CategoryPage (structure + images uniquement)
-  Future<void> _preloadCategoryPage(City city) async {
+  /// ✅ API SPÉCIALISÉE : Précharge UNE catégorie avec ses vraies sections
+  Future<void> startPreloadCategory(City city, String categoryId) async {
+    print('🚀 PRELOAD CATEGORY SPECIFIC: $categoryId pour ${city.cityName}');
+
+    state = state.copyWith(state: PreloadState.loading);
+
     try {
-      // 1. Récupérer la première catégorie
-      final allCategories = await ref.read(categoriesProvider.future);
-      if (allCategories.isEmpty) {
-        throw Exception('Aucune catégorie disponible');
+      await _preloadSpecificCategoryWithRealSections(categoryId, city);
+      state = state.copyWith(state: PreloadState.ready);
+      print('✅ PRELOAD CATEGORY SPECIFIC: Terminé');
+    } catch (e) {
+      print('❌ PRELOAD CATEGORY SPECIFIC: Erreur $e');
+      state = state.copyWith(state: PreloadState.ready); // Fail-open
+    }
+  }
+
+
+  /// ✅ API SILENCIEUSE : Précharge catégorie sans toucher l'état global
+  Future<void> warmCategorySilently(City city, String categoryId) async {
+    try {
+      print('🔥 WARM SILENTLY: $categoryId pour ${city.cityName}');
+
+      // ✅ PAS de state = loading ici (garde l'état actuel)
+      await _preloadSpecificCategoryWithRealSections(categoryId, city);
+      // ✅ PAS de state = ready non plus
+
+      print('✅ WARM SILENTLY: $categoryId terminé (${state.carouselData.length} datasets)');
+    } catch (e) {
+      print('❌ WARM SILENTLY: Erreur $categoryId: $e');
+      // Fail silencieusement, pas de changement d'état
+    }
+  }
+
+  /// ✅ API SILENCIEUSE : Précharge headers de catégories (title + cover)
+  Future<void> warmCategoryHeadersSilently(City city, List<String> categoryIds, {int concurrency = 4}) async {
+    try {
+      print('🔥 WARM HEADERS SILENTLY: ${categoryIds.length} catégories pour ${city.cityName}');
+
+      final headers = <String, CategoryHeader>{...state.categoryHeaders};
+
+      // Helper pour traiter une catégorie
+      Future<void> runFor(String catId) async {
+        try {
+          final header = await _fetchCategoryHeader(city, catId);
+          if (header != null) {
+            headers[catId] = header;
+            print('✅ HEADER LOADED: ${header.title}');
+          }
+        } catch (e) {
+          print('⚠️ HEADER FAILED: $catId - $e');
+        }
       }
 
-      final firstCategory = allCategories.first;
-      print('🔄 PRELOAD CATEGORY: Structure de ${firstCategory.name} pour ${city.cityName}');
+      // Traitement par batch
+      final pending = [...categoryIds];
+      while (pending.isNotEmpty) {
+        final batch = pending.take(concurrency).toList();
+        pending.removeRange(0, batch.length);
+        await Future.wait(batch.map(runFor));
 
-      final carouselsInfo = <CarouselLoadInfo>[];
-      final imageUrls = <String>[];
+        // Mise à jour incrémentale
+        state = state.copyWith(categoryHeaders: headers);
+      }
 
-      // 2. ✅ NOUVEAU : Récupérer structure Featured (PAS les données)
-      await _collectFeaturedStructure(city, firstCategory, carouselsInfo, imageUrls);
+      print('✅ WARM HEADERS SILENTLY: ${headers.length} headers chargés');
 
-      // 3. ✅ NOUVEAU : Récupérer structure Subcategory (PAS les données)
-      await _collectSubcategoryStructure(city, firstCategory, carouselsInfo, imageUrls);
+      // ✅ CORRECTIF D : Ajouter covers dans criticalImageUrls pour précache T0
+      final coverUrls = headers.values
+          .map((header) => header.coverUrl)
+          .where((url) => url.isNotEmpty)
+          .toList();
 
-      // 4. Mettre à jour le state
-      state = state.copyWith(
-        criticalImageUrls: imageUrls,
-        carouselsInfo: carouselsInfo,
-      );
-
-      print('✅ PRELOAD CATEGORY: ${carouselsInfo.length} carrousels, ${imageUrls.length} images');
+      if (coverUrls.isNotEmpty) {
+        final updatedCriticalUrls = [...state.criticalImageUrls, ...coverUrls];
+        state = state.copyWith(
+          categoryHeaders: headers,
+          criticalImageUrls: updatedCriticalUrls,
+        );
+        print('🖼️ CRITICAL URLS: Ajouté ${coverUrls.length} covers → ${updatedCriticalUrls.length} total');
+      } else {
+        state = state.copyWith(categoryHeaders: headers);
+      }
 
     } catch (e) {
-      print('❌ PRELOAD CATEGORY: Erreur: $e');
+      print('❌ WARM HEADERS SILENTLY: Erreur $e');
+    }
+  }
+
+  /// Helper : Récupère header d'une catégorie (nom + cover)
+  Future<CategoryHeader?> _fetchCategoryHeader(City city, String categoryId) async {
+    try {
+      // 1) Titre depuis le modèle
+      final allCats = await ref.read(categoriesProvider.future);
+      final cat = allCats.cast<Category?>().firstWhere(
+            (c) => c?.id == categoryId,
+        orElse: () => null,
+      );
+      if (cat == null) return null;
+
+      // Utiliser directement la cover de catégorie (plus fiable)
+      String coverUrl = cat.coverUrl ?? '';
+
+      // ✅ OPTIONNEL : Essayer de récupérer depuis première activité si cover catégorie vide
+      if (coverUrl.isEmpty) {
+        try {
+          const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
+          const String featuredSectionId = '5aa09feb-397a-4ad1-8142-7dcf0b2edd0f';
+
+          final isEvents = categoryId == eventsCategoryId;
+          final sectionId = isEvents ? '7f94df23-ab30-4bf3-afb2-59320e5466a7' : featuredSectionId;
+
+          List<dynamic> items;
+          if (isEvents) {
+            items = await ref.read(getEventsUseCaseProvider).execute(
+              latitude: city.lat,
+              longitude: city.lon,
+              sectionId: sectionId,
+              categoryId: categoryId,
+              limit: 1,
+            );
+          } else {
+            items = await ref.read(getActivitiesUseCaseProvider).execute(
+              latitude: city.lat,
+              longitude: city.lon,
+              sectionId: sectionId,
+              categoryId: categoryId,
+              limit: 1,
+            );
+          }
+
+          // ✅ EXTRACTION SIMPLE avec try/catch global
+          if (items.isNotEmpty) {
+            final item = items.first;
+            try {
+              // Essayer diverses propriétés possibles
+              coverUrl = (item as dynamic).mainImageUrl ??
+                  (item as dynamic).imageUrl ??
+                  (item as dynamic).picture ??
+                  (item as dynamic).thumbnail ?? '';
+            } catch (_) {
+              // Ignore, coverUrl reste vide → utilise cat.coverUrl
+            }
+          }
+        } catch (e) {
+          print('⚠️ COVER FETCH: Fallback failed pour $categoryId: $e');
+        }
+      }
+
+      return CategoryHeader(title: cat.name, coverUrl: coverUrl);
+
+    } catch (e) {
+      print('❌ FETCH HEADER: Erreur $categoryId: $e');
+      return null;
+    }
+  }
+
+
+  /// Charge UNE catégorie avec ses VRAIES sections
+  Future<void> _preloadSpecificCategoryWithRealSections(String categoryId, City city) async {
+    try {
+      const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
+      const limit = 3;
+
+      final carouselData = <String, List<ExperienceItem>>{...state.carouselData};
+      final imageUrls = <String>[...state.criticalImageUrls];
+
+      print('🔄 PRELOAD SPECIFIC CATEGORY: $categoryId pour ${city.cityName}');
+
+      // ✅ ÉVÉNEMENTS : Section spéciale
+      if (categoryId == eventsCategoryId) {
+        try {
+          final eventsSectionId = '7f94df23-ab30-4bf3-afb2-59320e5466a7';
+          final eventsKey = 'cat:$categoryId:featured:$eventsSectionId';
+
+          final eventsItems = await _loadCategoryCarouselData(
+              city, categoryId, eventsSectionId, null, limit, imageUrls);
+
+          if (eventsItems.isNotEmpty) {
+            carouselData[eventsKey] = eventsItems;
+            print('✅ PRELOAD EVENTS REAL: $eventsKey → ${eventsItems.length} items');
+          }
+        } catch (e) {
+          print('⚠️ PRELOAD EVENTS: Échec $e');
+        }
+      }
+      // ✅ ACTIVITÉS : Section générale + subcategories
+      else {
+        try {
+          final activitiesSectionId = '5aa09feb-397a-4ad1-8142-7dcf0b2edd0f';
+
+          // Featured (sans subcategory)
+          final featuredKey = 'cat:$categoryId:featured:$activitiesSectionId';
+          final featuredItems = await _loadCategoryCarouselData(
+              city, categoryId, activitiesSectionId, null, limit, imageUrls);
+
+          if (featuredItems.isNotEmpty) {
+            carouselData[featuredKey] = featuredItems;
+            print('✅ PRELOAD FEATURED REAL: $featuredKey → ${featuredItems.length} items');
+          }
+
+          // ✅ CORRECTION : Vraies subcategories (pas d'IDs génériques)
+          try {
+            final subcategories = await ref.read(subCategoriesForCategoryProvider(categoryId).future);
+            print('📋 SUBCATEGORIES FOUND: ${subcategories.length} pour $categoryId');
+
+            // Utiliser les 2 premières subcategories réelles
+            for (final subcategory in subcategories.take(2)) {
+              final subKey = 'cat:$categoryId:sub:${subcategory.id}:$activitiesSectionId';
+              final subItems = await _loadCategoryCarouselData(
+                  city, categoryId, activitiesSectionId, subcategory.id, limit, imageUrls);
+
+              if (subItems.isNotEmpty) {
+                carouselData[subKey] = subItems;
+                print('✅ PRELOAD SUB REAL: $subKey → ${subItems.length} items');
+              }
+            }
+          } catch (e) {
+            print('⚠️ PRELOAD SUBCATEGORIES: Pas de subcategories ou erreur: $e');
+            // Pas grave, on a au moins featured
+          }
+
+        } catch (e) {
+          print('⚠️ PRELOAD ACTIVITIES: Échec $e');
+        }
+      }
+
+      // ✅ DUPLICATION CITY pour compatibilité immédiate
+      final cityDuplicates = <String, List<ExperienceItem>>{};
+
+      for (final entry in carouselData.entries) {
+        final categoryKey = entry.key;
+        final items = entry.value;
+
+        // Si c'est une clé Category featured, dupliquer sous format City
+        if (categoryKey.startsWith('cat:') && categoryKey.contains(':featured:')) {
+          final parts = categoryKey.split(':');
+          if (parts.length >= 4) {
+            final catId = parts[1];
+            final sectionId = parts[3];
+
+            final cityKey = '${catId}_$sectionId';
+            cityDuplicates[cityKey] = items;
+            print('✅ PRELOAD DUPLICATE TO CITY: $cityKey → ${items.length} items');
+          }
+        }
+      }
+
+      // Ajouter les duplicatas
+      carouselData.addAll(cityDuplicates);
+
+      // Mise à jour state
+      state = state.copyWith(
+        carouselData: carouselData,
+        criticalImageUrls: imageUrls,
+      );
+
+      print('✅ PRELOAD SPECIFIC CATEGORY: ${carouselData.length} total datasets');
+
+    } catch (e) {
+      print('❌ PRELOAD SPECIFIC CATEGORY: Erreur $e');
       rethrow;
     }
   }
 
-  /// Collecte la structure Featured sans charger les données d'expériences
-  Future<void> _collectFeaturedStructure(
-      City city,
-      Category category,
-      List<CarouselLoadInfo> carouselsInfo,
-      List<String> imageUrls,
-      ) async {
+  /// Précharge catégorie spécifique avec vraies données
+  Future<void> _preloadSpecificCategory(String categoryId, City city) async {
     try {
-      // Récupérer les sections Featured (structure uniquement)
-      final featuredSections = await ref.read(featuredSectionsByCategoryProvider(category.id).future);
+      const limit = 3; // KISS: 3 items par carrousel
+      final carouselData = <String, List<ExperienceItem>>{...state.carouselData};
+      final imageUrls = <String>[...state.criticalImageUrls];
 
-      if (featuredSections != null) {
-        for (final section in featuredSections) {
-          // ✅ MÉTADONNÉES SEULEMENT (pas de vraies données)
-          carouselsInfo.add(CarouselLoadInfo(
-            categoryId: category.id,
-            sectionId: section.id,
-            title: section.title,
-            loadedItems: 10,
-            // Métadonnée : taille preload
-            isPartial: true,
-            // ✅ IMPORTANT : Déclenche T1 dans wrapper
-            totalAvailable: 25, // Métadonnée : taille complète estimée
-          ));
+      // Featured section
+      try {
+        final featuredKey = 'cat:$categoryId:featured:default';
+        final featuredItems = await _loadCategoryCarouselData(
+            city, categoryId, 'default', null, limit, imageUrls);
 
-
-          print('📋 PRELOAD FEATURED STRUCTURE: ${section.title}');
+        if (featuredItems.isNotEmpty) {
+          carouselData[featuredKey] = featuredItems;
+          print('✅ PRELOAD FEATURED: $featuredKey → ${featuredItems.length} items');
         }
+      } catch (e) {
+        print('⚠️ PRELOAD FEATURED: Échec $e');
       }
 
+      // Subcategories
+      try {
+        final subKeys = ['sub1', 'sub2']; // 2 subcategories max
+
+        for (final subId in subKeys) {
+          final subKey = 'cat:$categoryId:sub:$subId:default';
+          final subItems = await _loadCategoryCarouselData(
+              city, categoryId, 'default', subId, limit, imageUrls);
+
+          if (subItems.isNotEmpty) {
+            carouselData[subKey] = subItems;
+            print('✅ PRELOAD SUB: $subKey → ${subItems.length} items');
+          }
+        }
+      } catch (e) {
+        print('⚠️ PRELOAD SUB: Échec $e');
+      }
+
+      // Mise à jour state
+      state = state.copyWith(
+        carouselData: carouselData,
+        criticalImageUrls: imageUrls,
+      );
+
+      print('✅ PRELOAD SPECIFIC CATEGORY: ${carouselData.length} total datasets');
+
     } catch (e) {
-      print('❌ PRELOAD FEATURED STRUCTURE: Erreur: $e');
-      // Ne pas faire rethrow pour ne pas bloquer le preload
+      print('❌ PRELOAD SPECIFIC CATEGORY: Erreur $e');
+      rethrow;
     }
   }
 
-  /// Collecte la structure Subcategory sans charger les données d'expériences
-  Future<void> _collectSubcategoryStructure(
+  /// Helper: Charge les données d'un carrousel CityPage
+  Future<List<ExperienceItem>> _loadCarouselData(
       City city,
       Category category,
-      List<CarouselLoadInfo> carouselsInfo,
+      String sectionId,
+      int limit,
       List<String> imageUrls,
       ) async {
     try {
-      // Récupérer les sections Subcategory (structure uniquement)
-      final subcategorySections = await ref.read(effectiveSubcategorySectionsProvider(category.id).future);
+      const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
+      final isEvents = category.id == eventsCategoryId;
 
-      // Charger les 3 premières sections (comme avant)
-      final sectionsToLoad = subcategorySections.take(3).toList();
+      List<ExperienceItem> items;
 
-      for (final section in sectionsToLoad) {
-        // ✅ MÉTADONNÉES SEULEMENT (pas de vraies données)
-        carouselsInfo.add(CarouselLoadInfo(
+      if (isEvents) {
+        final events = await ref.read(getEventsUseCaseProvider).execute(
+          latitude: city.lat,
+          longitude: city.lon,
+          sectionId: sectionId,
           categoryId: category.id,
-          sectionId: section.id,
-          title: section.title,
-          loadedItems: 5, // Métadonnée : taille preload
-          isPartial: true, // ✅ IMPORTANT : Déclenche T1 dans wrapper
-          totalAvailable: 25, // Métadonnée : taille complète estimée
-        ));
+          limit: limit,
+        );
 
-        print('📋 PRELOAD SUBCATEGORY STRUCTURE: ${section.title}');
+        if (events.isNotEmpty) {
+          ref.read(activityDistancesProvider.notifier).cacheActivitiesDistances(
+            events.map((event) => (
+            id: event.base.id,
+            lat: event.base.latitude,
+            lon: event.base.longitude,
+            )).toList(),
+          );
+        }
+
+        items = events.map((event) => ExperienceItem.event(event)).toList();
+      } else {
+        final activities = await ref.read(getActivitiesUseCaseProvider).execute(
+          latitude: city.lat,
+          longitude: city.lon,
+          sectionId: sectionId,
+          categoryId: category.id,
+          limit: limit,
+        );
+
+        if (activities.isNotEmpty) {
+          ref.read(activityDistancesProvider.notifier).cacheActivitiesDistances(
+            activities.map((activity) => (
+            id: activity.base.id,
+            lat: activity.base.latitude,
+            lon: activity.base.longitude,
+            )).toList(),
+          );
+        }
+
+        items = activities.map((activity) => ExperienceItem.activity(activity)).toList();
       }
 
+      return items;
+
     } catch (e) {
-      print('❌ PRELOAD SUBCATEGORY STRUCTURE: Erreur: $e');
-      // Ne pas faire rethrow pour ne pas bloquer le preload
+      print('❌ PRELOAD CAROUSEL DATA: Erreur ${category.name}: $e');
+      return [];
+    }
+  }
+
+  /// Helper: Charge les données d'un carrousel CategoryPage
+  Future<List<ExperienceItem>> _loadCategoryCarouselData(
+      City city,
+      String categoryId,
+      String sectionId,
+      String? subcategoryId,
+      int limit,
+      List<String> imageUrls,
+      ) async {
+    try {
+      const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
+      final isEvents = categoryId == eventsCategoryId;
+
+      List<ExperienceItem> items;
+
+      if (isEvents) {
+        final events = await ref.read(getEventsUseCaseProvider).execute(
+          latitude: city.lat,
+          longitude: city.lon,
+          sectionId: sectionId,
+          categoryId: categoryId,
+          limit: limit,
+        );
+
+        if (events.isNotEmpty) {
+          ref.read(activityDistancesProvider.notifier).cacheActivitiesDistances(
+            events.map((event) => (
+            id: event.base.id,
+            lat: event.base.latitude,
+            lon: event.base.longitude,
+            )).toList(),
+          );
+        }
+
+        items = events.map((event) => ExperienceItem.event(event)).toList();
+      } else {
+        final activities = await ref.read(getActivitiesUseCaseProvider).execute(
+          latitude: city.lat,
+          longitude: city.lon,
+          sectionId: sectionId,
+          categoryId: categoryId,
+          subcategoryId: subcategoryId,
+          limit: limit,
+        );
+
+        if (activities.isNotEmpty) {
+          ref.read(activityDistancesProvider.notifier).cacheActivitiesDistances(
+            activities.map((activity) => (
+            id: activity.base.id,
+            lat: activity.base.latitude,
+            lon: activity.base.longitude,
+            )).toList(),
+          );
+        }
+
+        items = activities.map((activity) => ExperienceItem.activity(activity)).toList();
+      }
+
+      return items;
+
+    } catch (e) {
+      print('❌ PRELOAD CATEGORY CAROUSEL: Erreur $categoryId/$sectionId: $e');
+      return [];
     }
   }
 
@@ -377,3 +683,14 @@ class PreloadController extends StateNotifier<PreloadData> {
     state = const PreloadData(state: PreloadState.idle);
   }
 }
+/// Extension pour extraction facile des URLs de cover
+extension PreloadDataX on PreloadData {
+  List<String> coverUrlsFor(Iterable<String> catIds) =>
+      catIds
+          .map((id) => categoryHeaders[id]?.coverUrl)
+          .where((url) => url != null && url.isNotEmpty)
+          .cast<String>()
+          .toList();
+}
+
+

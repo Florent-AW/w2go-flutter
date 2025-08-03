@@ -123,9 +123,9 @@ class AppRouter {
 
       default:
       // Gestion des routes avec ID de catégorie
-        if (settings.name?.startsWith('/category/') ?? false) {
+        if (settings.name?.contains('/category') ?? false) {
           return MaterialPageRoute(
-            builder: (_) => CategoryPage(categoryId: categoryId),
+            builder: (_) => const CategoryPage(),
             settings: settings,
           );
         }

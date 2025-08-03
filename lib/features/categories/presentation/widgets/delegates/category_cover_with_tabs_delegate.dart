@@ -67,6 +67,7 @@ class CategoryCoverWithTabsDelegate extends SliverPersistentHeaderDelegate {
                     isAnimating: isAnimating,
                     screenHeight: _maxExtent / CategoryUIConstants.coverHeight,
                     contextRef: contextRef,
+                    controller: controller,
                   ).build(context, shrinkOffset, overlapsContent),
                 ),
               ),
