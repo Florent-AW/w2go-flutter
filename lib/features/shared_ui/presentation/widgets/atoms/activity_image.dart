@@ -13,7 +13,6 @@ class ActivityImage extends StatelessWidget with ViewportClampedRectTweenMixin {
   final BoxFit fit;
   final String? heroTag;
 
-
   const ActivityImage({
     Key? key,
     required this.imageUrl,
@@ -25,39 +24,57 @@ class ActivityImage extends StatelessWidget with ViewportClampedRectTweenMixin {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Specs EXACTES de l'expert Adam : Image.network + optimisations GPU
+    // ✅ Provider simple - PAS de dimensions complexes
+    final imageProvider = imageUrl.isNotEmpty
+        ? CachingImageProvider.of(imageUrl)
+        : null;
+
+    // ✅ Image avec frameBuilder anti-flash (logique inchangée)
     final image = imageUrl.isNotEmpty
         ? Image(
-      image: CachingImageProvider.of(imageUrl), // ✅ SINGLETON - même instance partout
-      gaplessPlayback: true, // ✅ Anti-flash critique
-      filterQuality: FilterQuality.medium, // ✅ Performance GPU
+      image: imageProvider!,
+      gaplessPlayback: true,
+      filterQuality: FilterQuality.medium,
       fit: fit,
       height: height,
       width: width ?? double.infinity,
+      // ✅ CRITIQUE : frameBuilder pour éliminer flash première frame
+      frameBuilder: (context, child, frame, wasSnychronouslyLoaded) {
+        // Si image en cache RAM → affichage instantané
+        if (wasSnychronouslyLoaded || frame != null) {
+          return child;
+        }
+        // Sinon placeholder stable (pas de shimmer flash)
+        return LoadingImagePlaceholder(height: height, width: width);
+      },
       errorBuilder: (context, error, stackTrace) {
         return ErrorImagePlaceholder(height: height, width: width);
       },
     )
         : LoadingImagePlaceholder(height: height, width: width);
 
-    // Si heroTag fourni, wrapper avec Hero optimisé
-    if (heroTag != null) {
+    // ✅ Hero logic reste identique mais utilise même provider
+    if (heroTag != null && imageProvider != null) {
       return Hero(
         tag: heroTag!,
         createRectTween: (b, e) => viewportClampedRectTween(b, e, context),
-        // ✅ Optimisations Hero selon experts
         placeholderBuilder: (context, heroSize, child) => child,
         flightShuttleBuilder: (flightContext, animation, flightDirection, fromHeroContext, toHeroContext) {
           return Container(
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppDimensions.radiusM), // ✅ Cohérent
+              borderRadius: BorderRadius.circular(AppDimensions.radiusM),
               child: Image(
-                image: CachingImageProvider.of(imageUrl),
+                image: imageProvider, // ✅ MÊME provider
                 gaplessPlayback: true,
                 filterQuality: FilterQuality.medium,
                 fit: fit,
                 height: height,
                 width: width ?? double.infinity,
+                frameBuilder: (context, child, frame, wasSnychronouslyLoaded) {
+                  return wasSnychronouslyLoaded || frame != null
+                      ? child
+                      : LoadingImagePlaceholder(height: height, width: width);
+                },
                 errorBuilder: (context, error, stackTrace) {
                   return ErrorImagePlaceholder(height: height, width: width);
                 },
@@ -74,5 +91,4 @@ class ActivityImage extends StatelessWidget with ViewportClampedRectTweenMixin {
       child: image,
     );
   }
-
 }

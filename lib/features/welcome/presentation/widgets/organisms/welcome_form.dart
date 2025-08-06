@@ -65,8 +65,8 @@ class WelcomeForm extends ConsumerWidget {
       // Mettre à jour le provider
       ref.read(selectedCityProvider.notifier).selectCity(city);
 
-      // Navigation vers CategoryPage
-      Navigator.of(context).pushReplacementNamed('/category');
+// Navigation vers CityPage
+      Navigator.of(context).pushReplacementNamed('/city');
     }
   }
 }

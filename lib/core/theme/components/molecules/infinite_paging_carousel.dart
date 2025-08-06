@@ -108,7 +108,6 @@ class _InfinitePagingCarouselState<T> extends State<InfinitePagingCarousel<T>> {
     if (widget.items.length > oldWidget.items.length) {
       _triggeredOffsets.clear();
       _precachedUrls.clear();
-      print('🔄 INFINITE CAROUSEL: Reset cache (items = ${widget.items.length})');
     }
   }
 
@@ -154,7 +153,6 @@ class _InfinitePagingCarouselState<T> extends State<InfinitePagingCarousel<T>> {
 
       if (!_triggeredOffsets.contains(triggerKey)) {
         _triggeredOffsets.add(triggerKey);
-        print('🚀 INFINITE CAROUSEL: Lazy load trigger à itemsSeen=$itemsSeen, remaining=$remaining');
         widget.onLoadMore!();
       }
     }
@@ -176,7 +174,6 @@ class _InfinitePagingCarouselState<T> extends State<InfinitePagingCarousel<T>> {
       _precacheImageAtIndex(behindIndex);
 
     } catch (e) {
-      print('❌ INFINITE CAROUSEL: Erreur pré-cache: $e');
     }
   }
 

@@ -1,14 +1,11 @@
 // lib/features/categories/presentation/widgets/delegates/category_cover_delegate.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:async/async.dart';
 import 'dart:math' as math;
 import '../../../../../core/domain/models/shared/category_view_model.dart';
-import '../../../../../core/domain/ports/providers/search/category_covers_provider.dart';
 import '../../../../../core/theme/app_colors.dart';
-import '../../../../../core/theme/app_interactions.dart';
 import '../../../../../core/common/utils/image_provider_factory.dart';
 import '../../constants/ui_constants.dart';
 import '../../controllers/cover_controller.dart';
@@ -66,15 +63,19 @@ class CategoryCoverDelegate extends SliverPersistentHeaderDelegate {
               key: ValueKey<String>("${category.id}_${controller.displayCoverUrl}"),
               width: double.infinity,
               height: double.infinity,
-              child: CachedNetworkImage(
-                imageUrl: controller.displayCoverUrl, // ✅ URL déjà précachée
+              child:
+              Image(
+                image: ImageProviderFactory.coverProvider(controller.displayCoverUrl, category.id),
                 fit: BoxFit.cover,
-                cacheKey: 'category_cover_${category.id}_${controller.displayCoverUrl}',
-                fadeInDuration: Duration.zero, // ✅ PAS d'animation (instantané si en cache)
-                placeholder: (context, url) => Container(
-                  color: Theme.of(context).colorScheme.surfaceVariant,
-                ),
-                errorWidget: (context, url, error) => Container(
+                frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                  if (wasSynchronouslyLoaded || frame != null) {
+                    return child;
+                  }
+                  return Container(
+                    color: Theme.of(context).colorScheme.surfaceVariant,
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) => Container(
                   color: Theme.of(context).colorScheme.surfaceVariant,
                   child: Center(
                     child: Icon(

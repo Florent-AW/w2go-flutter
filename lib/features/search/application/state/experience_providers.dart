@@ -112,15 +112,10 @@ final subcategorySectionExperiencesProvider = FutureProvider.family<Map<String, 
     final subcategoryId = key.subcategoryId;
     final city = key.city;
 
-    print('🔄 Chargement des expériences mixtes pour (catégorie: $categoryId, sous-catégorie: $subcategoryId)');
-    print('🔄 DEBUG EXPERIENCES: categoryId=$categoryId, subcategoryId=$subcategoryId, city=${city?.cityName}');
-    print('🔄 DEBUG EXPERIENCES: isEventsCategory=${categoryId == "c3b42899-fdc3-48f7-bd85-09be3381aba9"}');
-
     if (subcategoryId == null || city == null) return {};
 
     try {
       // Charger activities et events en parallèle
-      print('🔄 DEBUG: Avant Future.wait...');
       final futures = await Future.wait([
         ref.read(subcategorySectionActivitiesProvider(
             (categoryId: categoryId, subcategoryId: subcategoryId, city: city)
@@ -129,12 +124,8 @@ final subcategorySectionExperiencesProvider = FutureProvider.family<Map<String, 
             (categoryId: categoryId, subcategoryId: subcategoryId, city: city)
         ).future),
       ]);
-      print('🔄 DEBUG: Après Future.wait, résultats reçus');
-
       final activitiesBySections = futures[0] as Map<String, List<SearchableActivity>>;
       final eventsBySections = futures[1] as Map<String, List<SearchableEvent>>;
-      print('🔄 DEBUG: Activities sections: ${activitiesBySections.keys.toList()}');
-      print('🔄 DEBUG: Events sections: ${eventsBySections.keys.toList()}');
 
       // Fusionner les résultats par section
       final Map<String, List<ExperienceItem>> result = {};

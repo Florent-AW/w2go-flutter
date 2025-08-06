@@ -293,4 +293,56 @@ class AppDimensions {
     return results;
   }
 
+  // ================================
+// CACHE-ALIGNED SIZING SYSTEM v2.0
+// ================================
+
+  /// Calcule la largeur bucketisée pour cohérence cache
+  ///
+  /// Utilise la même logique que CachingImageProvider pour garantir
+  /// que précache et rendu utilisent exactement les mêmes dimensions
+  ///
+  /// [context] Context pour DPR et contraintes
+  /// [logicalWidth] Largeur logique calculée (peut être dynamique)
+  /// Returns: Largeur physique bucketisée (multiple de 16px)
+  static int calculateBucketedImageWidth(BuildContext context, double logicalWidth) {
+    final dpr = MediaQuery.of(context).devicePixelRatio;
+    final physicalWidth = (logicalWidth * dpr).round().clamp(320, 1536);
+
+    // ✅ Même bucketisation que CachingImageProvider
+    return (physicalWidth / 16).round() * 16;
+  }
+
+  /// Helper : Calcule largeur card + bucket en une fois
+  ///
+  /// Combine calculateCarouselCardWidth + bucketisation
+  /// Usage principal : précache post-layout cohérent
+  ///
+  /// [context] Context pour contraintes et DPR
+  /// Returns: (largeurLogique, largeurBucketisée)
+  static (double logical, int bucketed) calculateCarouselCardDimensions(BuildContext context) {
+    final screenConstraints = BoxConstraints(maxWidth: MediaQuery.of(context).size.width);
+    final logicalWidth = calculateCarouselCardWidth(screenConstraints);
+    final bucketedWidth = calculateBucketedImageWidth(context, logicalWidth);
+
+    return (logicalWidth, bucketedWidth);
+  }
+
+  /// Debug : Valide cohérence buckets sur différentes tailles
+  static Map<String, dynamic> validateCacheBuckets(BuildContext context) {
+    final testWidths = [280.0, 320.0, 360.0, 400.0]; // largeurs cards typiques
+    final results = <String, dynamic>{};
+
+    for (final width in testWidths) {
+      final bucketed = calculateBucketedImageWidth(context, width);
+      results['logical_${width.round()}'] = {
+        'logical': width,
+        'bucketed': bucketed,
+        'ratio': (bucketed / width).toStringAsFixed(2),
+      };
+    }
+
+    return results;
+  }
+
 }

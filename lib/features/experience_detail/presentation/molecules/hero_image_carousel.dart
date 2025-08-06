@@ -165,7 +165,7 @@ class _HeroImageCarouselState extends State<HeroImageCarousel> {
     );
   }
 
-  /// ✅ Précache toutes les images dès l'initialisation
+  /// ✅ Précache toutes les images dès l'initialisation - API SIMPLIFIÉE
   void _precacheImages() {
     if (widget.imageUrls.length <= 1) return;
 
@@ -173,8 +173,6 @@ class _HeroImageCarouselState extends State<HeroImageCarousel> {
       CachingImageProvider.precacheMultiple(
         widget.imageUrls,
         context,
-        cacheWidth: 800,
-        cacheHeight: 600,
         maxConcurrent: 3,
       );
     });

@@ -218,7 +218,6 @@ class ActivityDistanceManager implements ActivityDistanceManagerPort {
         }
       }
 
-      print('📊 Batch distances calculées: ${results.length}/${activities.length}');
     } catch (e) {
       print('❌ Erreur batch calcul distances: $e');
     }

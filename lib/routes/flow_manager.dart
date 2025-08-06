@@ -14,8 +14,8 @@ class FlowManager {
       print('🔄 Redirection vers: ${RouteNames.welcome}');
       return RouteNames.welcome;
     }
-    print('🔄 Redirection vers: ${RouteNames.category}');
-    return RouteNames.category; // Rediriger vers la page catégorie au lieu de home
+    print('🔄 Redirection vers: ${RouteNames.city}');
+    return RouteNames.city;
   }
 
   /// Vérifie si l'utilisateur peut accéder à une route spécifique

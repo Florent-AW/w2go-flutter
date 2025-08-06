@@ -39,12 +39,8 @@ class ActivitySearchAdapter implements ActivitySearchPort {
         params['p_subcategory_id'] = filter.subcategoryId!;
       }
 
-      print('📝 Appel get_activities_list avec params: $params');
-
       // Appel à la RPC Supabase optimisée
       final response = await _client.rpc('get_activities_list', params: params);
-
-      print('📊 Nombre d\'activités reçues: ${response.length}');
 
       // Mapper les résultats
       final List<SearchableActivity> activities = [];
@@ -57,7 +53,6 @@ class ActivitySearchAdapter implements ActivitySearchPort {
         }
       }
 
-      print('✅ Traitement terminé: ${activities.length} activités');
       return activities;
     } catch (e) {
       print('❌ Erreur dans getActivitiesWithFilter: $e');

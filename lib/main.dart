@@ -32,7 +32,11 @@ import 'core/domain/models/shared/city_model.dart';
 void main() async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
-    await dotenv.load(fileName: ".env");
+
+    // ✅ CONFIGURATION UNIQUE ImageCache (évite conflits)
+    _configureImageCache();
+
+        await dotenv.load(fileName: ".env");
 
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     await initializeDateFormatting('fr_FR', null);
@@ -69,9 +73,6 @@ void main() async {
         ? City.fromJson(json.decode(cityJson))
         : null;
 
-    PaintingBinding.instance.imageCache?.maximumSizeBytes = 360 * 1024 * 1024;
-    PaintingBinding.instance.imageCache?.maximumSize = 1000;
-
     runApp(
       ProviderScope(
         overrides: [
@@ -98,31 +99,34 @@ void main() async {
   }
 }
 
+/// ✅ Configuration centralisée du cache images
+void _configureImageCache() {
+  final imageCache = PaintingBinding.instance.imageCache;
+
+  // ✅ Valeurs optimisées pour featured précache + navigation fluide
+  imageCache.maximumSize = 500; // 500 images en RAM
+  imageCache.maximumSizeBytes = 200 << 20; // 200 Mo max
+
+  print('🖼️ IMAGE CACHE CONFIG: ${imageCache.maximumSize} images, ${(imageCache.maximumSizeBytes / (1024 * 1024)).round()} Mo');
+}
+
 class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Déterminer la route initiale basée sur l'état de l'utilisateur
     final initialRoute = FlowManager.getInitialRoute(ref);
     print('🚀 Route initiale: $initialRoute');
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-
-      // ✅ EXPERT 2025 : Configuration Material 3 optimisée
       theme: _buildLightTheme(context),
       darkTheme: _buildDarkTheme(context),
       themeMode: ThemeMode.system,
 
-      // ✅ EXPERT 2025 : Builder simple (compatible toutes versions Flutter)
-      builder: (context, child) => child!,
-
       initialRoute: initialRoute,
       onGenerateRoute: (settings) => AppRouter.generateRoute(settings, ref),
-
-      // ✅ EXPERT 2025 : Performance overlay pour validation 120 fps
-      showPerformanceOverlay: kDebugMode ? false : false, // Activez pour débuguer
+      showPerformanceOverlay: kDebugMode ? false : false,
     );
   }
 

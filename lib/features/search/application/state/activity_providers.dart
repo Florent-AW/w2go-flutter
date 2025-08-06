@@ -98,8 +98,6 @@ final subcategorySectionActivitiesProvider = FutureProvider.family<Map<String, L
     final subcategoryId = key.subcategoryId;
     final city = key.city;  // Utiliser city au lieu de cityId
 
-    print('🔄 Chargement des activités pour (catégorie: $categoryId, sous-catégorie: $subcategoryId, ville: ${city?.cityName})');
-
     if (subcategoryId == null) return {};
 
     // Utiliser ref.read pour les dépendances non réactives
@@ -122,13 +120,11 @@ final subcategorySectionActivitiesProvider = FutureProvider.family<Map<String, L
     }
 
     // Ajout de logs pour vérifier l'ordre avant tri
-    print('📋 Avant tri: ${sections.map((s) => '${s.title} (priority:${s.priority})').join(' → ')}');  // Correction de parenthèse manquante
 
     // Tri explicite par priorité (ascendant)
     sections.sort((a, b) => a.priority.compareTo(b.priority));
 
     // Logs après tri pour confirmation
-    print('🔀 Après tri: ${sections.map((s) => '${s.title} (priority:${s.priority})').join(' → ')}');
 
     // Paramètres pour la déduplication
     final int desiredLimit = 20; // Nombre d'activités souhaitées par section
@@ -139,7 +135,6 @@ final subcategorySectionActivitiesProvider = FutureProvider.family<Map<String, L
     try {
       // Pour chaque section, récupérer et dédupliquer les activités
       for (final section in sections) {
-        print('🔄 Chargement de la section ${section.title} (${section.id})');
         final sectionKey = 'section-${section.id}';
 
         // 1. Over-fetch: récupérer plus d'activités que nécessaire
@@ -166,7 +161,6 @@ final subcategorySectionActivitiesProvider = FutureProvider.family<Map<String, L
 
         if (displayActivities.isNotEmpty) {
           result[sectionKey] = displayActivities;
-          print('✅ Section ${section.title}: ${displayActivities.length} activités uniques (sur ${activities.length} récupérées)');
         } else {
           print('⚠️ Aucune activité unique pour la section ${section.title}');
         }
@@ -184,7 +178,6 @@ final subcategorySectionActivitiesProvider = FutureProvider.family<Map<String, L
         );
       }
 
-      print('📊 CACHE: ${result.length} sections avec ${seenIds.length} activités uniques au total');
       return result;
     } catch (e) {
       print('❌ Erreur lors du chargement des activités par sous-catégorie: $e');

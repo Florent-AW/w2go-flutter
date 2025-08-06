@@ -1,25 +1,24 @@
+// lib/core/common/utils/image_provider_factory.dart
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'caching_image_provider.dart';
 
+/// Factory simplifié - délègue tout à CachingImageProvider unifié
 class ImageProviderFactory {
-  /// ✅ Provider unifié EXACT pour covers (même que delegate)
+  /// ✅ Provider unifié pour covers (même API que vignettes)
   static ImageProvider coverProvider(String url, String categoryId) {
-    return CachedNetworkImageProvider(
-      url,
-      cacheKey: 'category_cover_${categoryId}_$url', // ✅ MÊME clé que delegate
-    );
+    // ✅ Utilise la même API unifiée - plus de cacheKey spécial
+    return CachingImageProvider.of(url);
   }
 
-  /// ✅ Provider fallback (même que delegate)
+  /// ✅ Provider fallback (même logique)
   static ImageProvider coverFallbackProvider(String url, String categoryId) {
-    return CachedNetworkImageProvider(
-      url,
-      cacheKey: 'category_cover_$categoryId', // ✅ MÊME clé que delegate
-    );
+    return CachingImageProvider.of(url);
   }
 
-  /// ✅ Provider pour vignettes
+  /// ✅ Provider pour vignettes - MÊME API unifiée
   static ImageProvider thumbnailProvider(String url) {
-    return CachedNetworkImageProvider(url); // Pas de cacheKey spéciale
+    return CachingImageProvider.of(url);
   }
 }

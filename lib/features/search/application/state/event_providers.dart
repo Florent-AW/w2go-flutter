@@ -90,8 +90,6 @@ final subcategorySectionEventsProvider = FutureProvider.family<Map<String, List<
     final subcategoryId = key.subcategoryId;
     final city = key.city;  // Utiliser city au lieu de cityId
 
-    print('🔄 Chargement des événements pour (catégorie: $categoryId, sous-catégorie: $subcategoryId, ville: ${city?.cityName})');
-
     if (subcategoryId == null) return {};
 
     // Utiliser ref.read pour les dépendances non réactives
@@ -131,7 +129,6 @@ final subcategorySectionEventsProvider = FutureProvider.family<Map<String, List<
     try {
       // Pour chaque section, récupérer et dédupliquer les événements
       for (final section in sections) {
-        print('🔄 Chargement de la section ${section.title} (${section.id})');
         final sectionKey = 'section-${section.id}';
 
         // 1. Over-fetch: récupérer plus d'événements que nécessaire
@@ -158,9 +155,7 @@ final subcategorySectionEventsProvider = FutureProvider.family<Map<String, List<
 
         if (displayEvents.isNotEmpty) {
           result[sectionKey] = displayEvents;
-          print('✅ Section ${section.title}: ${displayEvents.length} événements uniques (sur ${events.length} récupérés)');
         } else {
-          print('⚠️ Aucun événement unique pour la section ${section.title}');
         }
       }
 
@@ -176,7 +171,6 @@ final subcategorySectionEventsProvider = FutureProvider.family<Map<String, List<
         );
       }
 
-      print('📊 CACHE: ${result.length} sections avec ${seenIds.length} événements uniques au total');
       return result;
     } catch (e) {
       print('❌ Erreur lors du chargement des événements par sous-catégorie: $e');

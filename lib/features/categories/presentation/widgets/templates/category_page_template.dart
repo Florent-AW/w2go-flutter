@@ -311,135 +311,135 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
           ),
         ),
       ),      body: MediaQuery.removePadding(
-        context: context,
-        removeTop: true,
-        child: RepaintBoundary(
-          child: NotificationListener<ScrollNotification>(
-            onNotification: (notification) {
-              if (notification is ScrollUpdateNotification &&
-                  notification.depth ==
-                      0) { // depth 0 = scroll principal (vertical)
+      context: context,
+      removeTop: true,
+      child: RepaintBoundary(
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (notification is ScrollUpdateNotification &&
+                notification.depth ==
+                    0) { // depth 0 = scroll principal (vertical)
 
-                final isScrolled = notification.metrics.pixels > 150;
-                if (isScrolled != _isHeaderScrolled) {
-                  setState(() => _isHeaderScrolled = isScrolled);
-                }
+              final isScrolled = notification.metrics.pixels > 150;
+              if (isScrolled != _isHeaderScrolled) {
+                setState(() => _isHeaderScrolled = isScrolled);
               }
-              return false;
-            },
-            child: CustomScrollView(
-              key: const PageStorageKey('category_scroll'),
-              primary: true,
-              physics: scrollPhysics,
-              slivers: [
-                // Plus de SliverAppBar ici, commencer directement avec la cover
-                SliverPersistentHeader(
-                  pinned: false,
-                  delegate: _coverDelegate!, // Utiliser l'instance stable initialisée dans didChangeDependencies
-                ),
+            }
+            return false;
+          },
+          child: CustomScrollView(
+            key: const PageStorageKey('category_scroll'),
+            primary: true,
+            physics: scrollPhysics,
+            slivers: [
+              // Plus de SliverAppBar ici, commencer directement avec la cover
+              SliverPersistentHeader(
+                pinned: false,
+                delegate: _coverDelegate!, // Utiliser l'instance stable initialisée dans didChangeDependencies
+              ),
 
-                // ✅ 3. Featured Activities - SIMPLIFIÉ avec Organism
-                SliverToBoxAdapter(
-                  key: const PageStorageKey('featured_section'),
-                  child: RepaintBoundary(
-                    child: Container(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Ajouter de l'espace en haut
-                          SizedBox(height: AppDimensions.spacingM),
+              // ✅ 3. Featured Activities - SIMPLIFIÉ avec Organism
+              SliverToBoxAdapter(
+                key: const PageStorageKey('featured_section'),
+                child: RepaintBoundary(
+                  child: Container(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Ajouter de l'espace en haut
+                        SizedBox(height: AppDimensions.spacingM),
 
-                          // ✅ NOUVEAU : Organism unifié pour Featured
-                          FeaturedSectionOrganism(
-                            currentCategory: widget.currentCategory,
-                            openBuilder: widget.openBuilder,
-                          ),
-                        ],
-                      ),
+                        // ✅ NOUVEAU : Organism unifié pour Featured
+                        FeaturedSectionOrganism(
+                          currentCategory: widget.currentCategory,
+                          openBuilder: widget.openBuilder,
+                        ),
+                      ],
                     ),
                   ),
                 ),
+              ),
 
 
-                // 4. Subcategory Selector - AVEC SKELETON PENDANT CHARGEMENT
-                Consumer(
-                  builder: (context, ref, _) {
-                    final selectedCity = ref.watch(selectedCityProvider);
-                    final selectedSubcategory = ref.watch(
-                        selectedSubcategoryByCategoryProvider(widget.currentCategory.id)
-                    );
+              // 4. Subcategory Selector - AVEC SKELETON PENDANT CHARGEMENT
+              Consumer(
+                builder: (context, ref, _) {
+                  final selectedCity = ref.watch(selectedCityProvider);
+                  final selectedSubcategory = ref.watch(
+                      selectedSubcategoryByCategoryProvider(widget.currentCategory.id)
+                  );
 
-                    // ✅ NOUVEAU : Utiliser le provider filtré avec skeleton
-                    final subcategoriesAsync = ref.watch(subcategoriesWithContentProvider((
-                    categoryId: widget.currentCategory.id,
-                    city: selectedCity,
-                    )));
+                  // ✅ NOUVEAU : Utiliser le provider filtré avec skeleton
+                  final subcategoriesAsync = ref.watch(subcategoriesWithContentProvider((
+                  categoryId: widget.currentCategory.id,
+                  city: selectedCity,
+                  )));
 
-                    return subcategoriesAsync.when(
-                      data: (subcategoriesWithContent) {
-                        // Si aucune sous-catégorie n'a de contenu, masquer complètement
-                        if (subcategoriesWithContent.isEmpty) {
-                          return SliverToBoxAdapter(child: SizedBox.shrink());
-                        }
+                  return subcategoriesAsync.when(
+                    data: (subcategoriesWithContent) {
+                      // Si aucune sous-catégorie n'a de contenu, masquer complètement
+                      if (subcategoriesWithContent.isEmpty) {
+                        return SliverToBoxAdapter(child: SizedBox.shrink());
+                      }
 
-                        // Ajuster la sélection si nécessaire
-                        if (selectedSubcategory != null &&
-                            !subcategoriesWithContent.contains(selectedSubcategory)) {
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            ref.read(selectedSubcategoryByCategoryProvider(widget.currentCategory.id).notifier)
-                                .state = subcategoriesWithContent.first;
-                          });
-                        }
+                      // Ajuster la sélection si nécessaire
+                      if (selectedSubcategory != null &&
+                          !subcategoriesWithContent.contains(selectedSubcategory)) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          ref.read(selectedSubcategoryByCategoryProvider(widget.currentCategory.id).notifier)
+                              .state = subcategoriesWithContent.first;
+                        });
+                      }
 
-                        // Mettre à jour le TabController avec les sous-catégories filtrées
-                        _updateTabController(subcategoriesWithContent, selectedSubcategory);
+                      // Mettre à jour le TabController avec les sous-catégories filtrées
+                      _updateTabController(subcategoriesWithContent, selectedSubcategory);
 
-                        return SliverPersistentHeader(
-                          pinned: false,
-                          delegate: SubcategoryTabsDelegate(
-                            subcategories: subcategoriesWithContent,
-                            tabController: _subcategoryTabController,
-                            onSubcategorySelected: (subcategory, index) {
-                              ref.read(selectedSubcategoryByCategoryProvider(widget.currentCategory.id).notifier)
-                                  .state = subcategory;
-                            },
-                            categoryColor: AppColors.getCategoryColor(
-                                widget.currentCategory.name,
-                                isDark: Theme.of(context).brightness == Brightness.dark),
-                          ),
-                        );
-                      },
-
-                      // ✅ NOUVEAU : Skeleton pendant le chargement
-                      loading: () => SliverPersistentHeader(
+                      return SliverPersistentHeader(
                         pinned: false,
-                        delegate: _SubcategoryTabsSkeletonDelegate(
+                        delegate: SubcategoryTabsDelegate(
+                          subcategories: subcategoriesWithContent,
+                          tabController: _subcategoryTabController,
+                          onSubcategorySelected: (subcategory, index) {
+                            ref.read(selectedSubcategoryByCategoryProvider(widget.currentCategory.id).notifier)
+                                .state = subcategory;
+                          },
                           categoryColor: AppColors.getCategoryColor(
                               widget.currentCategory.name,
                               isDark: Theme.of(context).brightness == Brightness.dark),
                         ),
+                      );
+                    },
+
+                    // ✅ NOUVEAU : Skeleton pendant le chargement
+                    loading: () => SliverPersistentHeader(
+                      pinned: false,
+                      delegate: _SubcategoryTabsSkeletonDelegate(
+                        categoryColor: AppColors.getCategoryColor(
+                            widget.currentCategory.name,
+                            isDark: Theme.of(context).brightness == Brightness.dark),
                       ),
+                    ),
 
-                      // ✅ Masquer en cas d'erreur
-                      error: (error, stackTrace) => SliverToBoxAdapter(child: SizedBox.shrink()),
-                    );
-                  },
+                    // ✅ Masquer en cas d'erreur
+                    error: (error, stackTrace) => SliverToBoxAdapter(child: SizedBox.shrink()),
+                  );
+                },
+              ),
+
+
+              // 5. Subcategory Activities - Déjà corrigé avec une clé constante
+              SliverToBoxAdapter(
+                key: const PageStorageKey('subcategory_section'),
+                // Renommé pour plus de clarté
+                child: SubcategoryActivitiesSection(
+                  openBuilder: widget.openBuilder,
                 ),
-
-
-                // 5. Subcategory Activities - Déjà corrigé avec une clé constante
-                SliverToBoxAdapter(
-                  key: const PageStorageKey('subcategory_section'),
-                  // Renommé pour plus de clarté
-                  child: SubcategoryActivitiesSection(
-                    openBuilder: widget.openBuilder,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
+    ),
     );
   }
 

@@ -368,6 +368,32 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           }
         });
       }
+
+      Future.delayed(const Duration(milliseconds: 250), () async {
+        if (!mounted) return;
+
+        // ✅ WARM T2 : Précharger featured carousels des autres catégories
+        try {
+          final selectedCity = ref.read(selectedCityProvider);
+          final currentCategory = ref.read(selectedCategoryProvider);
+
+          if (selectedCity != null) {
+            print('🔥 HOME SHELL: Démarrage warm T2 featured carousels');
+
+            await ref.read(preloadControllerProvider.notifier).warmFeaturedCarouselsSilently(
+              selectedCity,
+              excludeCategoryId: currentCategory?.id, // Exclure catégorie courante
+              itemsPerCarousel: 3,
+              concurrency: 3, // Moins agressif que T0
+            );
+
+            print('✅ HOME SHELL: Warm T2 terminé');
+          }
+        } catch (e) {
+          print('❌ HOME SHELL: Erreur warm T2: $e');
+          // Fail silencieusement, pas critique pour UX
+        }
+      });
     });
   }
 

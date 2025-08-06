@@ -38,12 +38,8 @@ class EventSearchAdapter implements EventSearchPort {
         params['p_subcategory_id'] = filter.subcategoryId!;
       }
 
-      print('📝 Appel get_events_list avec params: $params');
-
       // Appel à la RPC Supabase optimisée pour les events
       final response = await _client.rpc('get_events_list', params: params);
-
-      print('📊 Nombre d\'événements reçus: ${response.length}');
 
       // Mapper les résultats
       final List<SearchableEvent> events = [];
@@ -56,7 +52,6 @@ class EventSearchAdapter implements EventSearchPort {
         }
       }
 
-      print('✅ Traitement terminé: ${events.length} événements');
       return events;
     } catch (e) {
       print('❌ Erreur dans getEventsWithFilter: $e');

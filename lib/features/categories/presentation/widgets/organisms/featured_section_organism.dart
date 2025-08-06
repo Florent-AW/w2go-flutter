@@ -9,15 +9,17 @@ import '../../../../../core/domain/models/event/search/searchable_event.dart';
 import '../../../../../core/domain/models/shared/experience_item.dart';
 import '../../../../../core/theme/app_dimensions.dart';
 import '../../../../shared_ui/presentation/widgets/organisms/generic_experience_carousel.dart';
+import '../../../../shared_ui/presentation/widgets/molecules/experience_carousel_wrapper.dart';
+import '../../../../preload/application/preload_providers.dart';
+import '../../../../preload/application/preload_controller.dart';
+import '../../../application/pagination/category_pagination_providers.dart';
 import '../../../../search/application/state/experience_providers.dart';
 import '../../../../search/application/state/city_selection_state.dart';
-import '../../../../shared_ui/presentation/widgets/molecules/experience_carousel_wrapper.dart';
 import '../../../../experience_detail/presentation/pages/experience_detail_page.dart';
-import '../../../application/pagination/category_pagination_providers.dart';
 
 /// Organism pour afficher la section Featured d'une catégorie
-/// Utilise le wrapper unifié ExperienceCarouselWrapper (architecture identique CityPage)
-class FeaturedSectionOrganism extends ConsumerStatefulWidget {
+/// Utilise les vrais providers pour afficher les données
+class FeaturedSectionOrganism extends ConsumerWidget {
   /// La catégorie actuellement affichée
   final CategoryViewModel currentCategory;
 
@@ -31,19 +33,9 @@ class FeaturedSectionOrganism extends ConsumerStatefulWidget {
   }) : super(key: key);
 
   @override
-  ConsumerState<FeaturedSectionOrganism> createState() =>
-      _FeaturedSectionOrganismState();
-}
-
-class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganism> {
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final selectedCity = ref.watch(selectedCityProvider);
+
     // Si aucune ville sélectionnée, afficher un skeleton
     if (selectedCity == null) {
       return SizedBox(
@@ -56,15 +48,20 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
       );
     }
 
-    return _buildFeaturedSections(selectedCity);
+    return _buildFeaturedSections(ref, selectedCity);
   }
 
-  /// Construit les sections Featured avec fallback data (évite conflits)
-  Widget _buildFeaturedSections(dynamic selectedCity) {
-    final sectionsAsync = ref.watch(featuredSectionsByCategoryProvider(widget.currentCategory.id));
+  /// Construit les sections Featured avec les données réelles
+  Widget _buildFeaturedSections(WidgetRef ref, dynamic selectedCity) {
+    // ✅ NOUVEAU : Récupérer header preload pour titre stable
+    final preloadData = ref.watch(preloadControllerProvider);
+    final categoryHeader = preloadData.categoryHeaders[currentCategory.id];
+
+    final sectionsAsync = ref.watch(featuredSectionsByCategoryProvider(currentCategory.id));
+
     return sectionsAsync.when(
       data: (sections) {
-        print('🎯 FEATURED SECTIONS DATA: Reçu ${sections.length} sections à ${DateTime.now().millisecondsSinceEpoch}');
+        print('🎯 FEATURED SECTIONS DATA: Reçu ${sections.length} sections');
         if (sections.isEmpty) {
           return const SizedBox.shrink();
         }
@@ -72,7 +69,7 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
         final sectionWidgets = <Widget>[];
         for (final section in sections) {
           sectionWidgets.add(
-            _buildFeaturedSectionWithFallback(section, selectedCity),
+            _buildFeaturedSectionWithData(ref, section, selectedCity, categoryHeader),
           );
         }
 
@@ -94,68 +91,43 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
     );
   }
 
-  /// Construit un wrapper Featured avec données fallback pour éviter les conflits
-  Widget _buildFeaturedSectionWithFallback(dynamic section, dynamic selectedCity) {
-    const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
-    final isEventsCategory = widget.currentCategory.id == eventsCategoryId;
-
-    // ✅ RÉCUPÉRER les données existantes comme fallback
-    final fallbackDataAsync = ref.watch(
-      isEventsCategory
-          ? featuredEventsBySectionProvider((
-      sectionId: section.id,
-      categoryId: widget.currentCategory.id,
+  /// Construit un carousel Featured avec le système de pagination + fallback preload
+  Widget _buildFeaturedSectionWithData(WidgetRef ref, dynamic section, dynamic selectedCity, CategoryHeader? categoryHeader) {
+    // Créer les paramètres pour le provider de pagination
+    final params = createFeaturedParams(
       city: selectedCity,
-      ))
-          : featuredActivitiesBySectionProvider((
       sectionId: section.id,
-      categoryId: widget.currentCategory.id,
-      city: selectedCity,
-      )),
+      categoryId: currentCategory.id,
     );
 
-    return fallbackDataAsync.when(
-      data: (fallbackExperiences) {
-        print('🎯 FEATURED FALLBACK: ${section.title} avec ${fallbackExperiences.length} items à ${DateTime.now().millisecondsSinceEpoch}');
+    // ✅ NOUVEAU : Récupérer les données preload comme fallback
+    final preloadData = ref.watch(preloadControllerProvider);
+    final fallbackKey = 'cat:${currentCategory.id}:featured:${section.id}';
+    final fallbackExperiences = preloadData.carouselData[fallbackKey];
 
-        // ✅ CORRECTION : Utiliser CategoryCarouselParams au lieu de createFeaturedParams
-        final params = CategoryCarouselParams(
-          city: selectedCity,
-          sectionId: section.id,
-          categoryId: widget.currentCategory.id,
-          subcategoryId: null, // Featured n'a pas de sous-catégorie
-        );
+    // ✅ NOUVEAU : Titre stable (header preload prioritaire)
+    final stableTitle = categoryHeader?.title ?? section.title ?? 'À la une';
 
-        return ExperienceCarouselWrapper(
-          key: ValueKey('featured_unified_${widget.currentCategory.id}_${section.id}'),
-          paginationProvider: categoryFeaturedPaginationProvider,
-          providerParams: params, // ✅ CORRECTION : Objet CategoryCarouselParams
-          carouselContext: CarouselContext.categoryFeatured,
-          title: section.title,
-          heroPrefix: 'featured-${widget.currentCategory.id}-${section.id}',
-          openBuilder: _buildOpenBuilder(),
-          showDistance: true,
-        );
-      },
-      loading: () => Container(
-        height: AppDimensions.activityCardHeight + AppDimensions.space20,
-        margin: EdgeInsets.only(bottom: AppDimensions.spacingXs),
-        child: GenericExperienceCarousel(
-          title: section.title,
-          experiences: null,
-          isLoading: true,
-        ),
+    return Container(
+      margin: EdgeInsets.only(bottom: AppDimensions.spacingXs),
+      child: ExperienceCarouselWrapper(
+        key: ValueKey('featured_unified_${currentCategory.id}_${section.id}'),
+        paginationProvider: categoryFeaturedPaginationProvider,
+        providerParams: params,
+        carouselContext: CarouselContext.categoryFeatured,
+        title: stableTitle, // ✅ Titre stable
+        heroPrefix: 'featured-${currentCategory.id}-${section.id}',
+        openBuilder: _buildOpenBuilder(),
+        showDistance: true,
+        // ✅ NOUVEAU : Fallback avec données preload
+        fallbackExperiences: fallbackExperiences,
       ),
-      error: (error, stack) {
-        print('❌ FEATURED FALLBACK: Erreur ${section.title}: $error');
-        return const SizedBox.shrink();
-      },
     );
   }
 
   /// OpenBuilder unifié Activities + Events
   Widget Function(BuildContext, VoidCallback, dynamic)? _buildOpenBuilder() {
-    return widget.openBuilder != null
+    return openBuilder != null
         ? (context, action, experience) {
       if (experience is ExperienceItem) {
         return ExperienceDetailPage(
@@ -165,7 +137,6 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
       } else {
         // Fallback legacy pour SearchableActivity
         if (experience.isEvent) {
-          print('Navigation vers événement: ${experience.name}');
           return ExperienceDetailPage(
             experienceItem: experience is ExperienceItem
                 ? experience
@@ -173,7 +144,7 @@ class _FeaturedSectionOrganismState extends ConsumerState<FeaturedSectionOrganis
             onClose: action,
           );
         } else {
-          return widget.openBuilder!(context, action, experience.asActivity!);
+          return openBuilder!(context, action, experience.asActivity!);
         }
       }
     }

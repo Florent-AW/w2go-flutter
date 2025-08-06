@@ -8,18 +8,20 @@ import '../../../../../core/domain/models/shared/subcategory_model.dart';
 import '../../../../../core/domain/models/activity/search/searchable_activity.dart';
 import '../../../../../core/domain/models/event/search/searchable_event.dart';
 import '../../../../../core/domain/models/shared/experience_item.dart';
+import '../../../../../core/domain/pagination/paginated_data_provider.dart';
 import '../../../../experience_detail/presentation/pages/experience_detail_page.dart';
-import '../../../../../features/search/application/state/section_discovery_providers.dart';
-import '../../../../../features/search/application/state/city_selection_state.dart';
-import '../../../../../features/shared_ui/presentation/widgets/organisms/generic_experience_carousel.dart';
+import '../../../../shared_ui/presentation/widgets/organisms/generic_experience_carousel.dart';
+import '../../../../search/application/state/city_selection_state.dart';
 import '../../../../shared_ui/presentation/widgets/molecules/experience_carousel_wrapper.dart';
+import '../../../../search/application/state/section_discovery_providers.dart';
+import '../../../../preload/application/preload_providers.dart';
 import '../../../application/pagination/category_pagination_providers.dart';
 import '../../../application/state/categories_provider.dart';
 import '../../../application/state/subcategories_provider.dart';
 
 /// Widget pour afficher les sections d'activités d'une sous-catégorie
-/// Utilise le wrapper unifié ExperienceCarouselWrapper (architecture identique CityPage)
-class SubcategoryActivitiesSection extends ConsumerStatefulWidget {
+/// Utilise les vrais providers pour afficher les données
+class SubcategoryActivitiesSection extends ConsumerWidget {
   final Widget Function(BuildContext, VoidCallback, SearchableActivity)? openBuilder;
 
   const SubcategoryActivitiesSection({
@@ -28,19 +30,7 @@ class SubcategoryActivitiesSection extends ConsumerStatefulWidget {
   }) : super(key: key);
 
   @override
-  ConsumerState<SubcategoryActivitiesSection> createState() => _SubcategoryActivitiesSectionState();
-}
-
-class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivitiesSection> {
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final currentCategory = ref.watch(selectedCategoryProvider);
     final selectedSubcategory = ref.watch(selectedSubcategoryByCategoryProvider(currentCategory?.id ?? ''));
     final selectedCity = ref.watch(selectedCityProvider);
@@ -55,11 +45,11 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
       return _buildLoadingSkeleton(context, selectedSubcategory);
     }
 
-    return _buildSubcategorySections(context, currentCategory, selectedSubcategory, selectedCity);
+    return _buildSubcategorySections(context, ref, currentCategory, selectedSubcategory, selectedCity);
   }
 
-  /// Construit les sections Subcategory avec le wrapper unifié (pattern CityPage)
-  Widget _buildSubcategorySections(BuildContext context, dynamic currentCategory, Subcategory selectedSubcategory, dynamic selectedCity) {
+  /// Construit les sections Subcategory avec les vraies données
+  Widget _buildSubcategorySections(BuildContext context, WidgetRef ref, dynamic currentCategory, Subcategory selectedSubcategory, dynamic selectedCity) {
     final sectionsAsync = ref.watch(effectiveSubcategorySectionsProvider(currentCategory?.id));
 
     return sectionsAsync.when(
@@ -68,6 +58,8 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
           return _buildNoSectionsAvailableUI(context);
         }
 
+        // ✅ NOUVEAU : Récupérer preload data
+        final preloadData = ref.watch(preloadControllerProvider);
         final sectionWidgets = <Widget>[];
 
         for (final section in sections) {
@@ -77,6 +69,10 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
             categoryId: currentCategory?.id ?? '',
             subcategoryId: selectedSubcategory.id,
           );
+
+          // ✅ NOUVEAU : Clé de fallback preload
+          final fallbackKey = 'cat:${currentCategory?.id}:sub:${selectedSubcategory.id}:${section.id}';
+          final fallbackExperiences = preloadData.carouselData[fallbackKey];
 
           sectionWidgets.add(
             Container(
@@ -90,7 +86,8 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
                 heroPrefix: 'subcategory-${currentCategory?.id}-${selectedSubcategory.id}-${section.id}',
                 openBuilder: _buildOpenBuilder(),
                 showDistance: true,
-                // Pas de onSeeAllPressed pour Subcategory
+                // ✅ NOUVEAU : Fallback avec données preload
+                fallbackExperiences: fallbackExperiences,
               ),
             ),
           );
@@ -128,8 +125,8 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
   }
 
   /// OpenBuilder unifié pour les expériences
-  Widget Function(BuildContext, VoidCallback, ExperienceItem)? _buildOpenBuilder() {
-    return widget.openBuilder != null
+  Widget Function(BuildContext, VoidCallback, dynamic)? _buildOpenBuilder() {
+    return openBuilder != null
         ? (context, action, experience) {
       if (experience is ExperienceItem) {
         return ExperienceDetailPage(
@@ -138,14 +135,25 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
         );
       } else {
         // Fallback legacy
-        if (experience.isEvent) {
-          return ExperienceDetailPage(
-            experienceItem: ExperienceItem.event(experience as SearchableEvent),
-            onClose: action,
-          );
-        } else {
-          return widget.openBuilder!(context, action, experience.asActivity!);
+        try {
+          if (experience is SearchableEvent) {
+            return ExperienceDetailPage(
+              experienceItem: ExperienceItem.event(experience),
+              onClose: action,
+            );
+          } else if (experience is SearchableActivity) {
+            return openBuilder!(context, action, experience);
+          }
+        } catch (e) {
+          print('❌ OpenBuilder error: $e');
         }
+        // Fallback par défaut
+        return ExperienceDetailPage(
+          experienceItem: experience is ExperienceItem
+              ? experience
+              : ExperienceItem.activity(experience as SearchableActivity),
+          onClose: action,
+        );
       }
     }
         : null;
@@ -159,7 +167,7 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
         Container(
           height: AppDimensions.activityCardHeight + AppDimensions.space20,
           margin: EdgeInsets.only(bottom: AppDimensions.spacingXs),
-          child: GenericExperienceCarousel(
+          child: const GenericExperienceCarousel(
             title: 'Chargement sections...',
             experiences: null,
             isLoading: true,
@@ -223,6 +231,4 @@ class _SubcategoryActivitiesSectionState extends ConsumerState<SubcategoryActivi
       ),
     );
   }
-
-
 }
