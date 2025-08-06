@@ -59,7 +59,7 @@ class CityPicker extends ConsumerWidget {
       ref.read(selectedCityProvider.notifier).selectCity(city);
 
       // ✅ Navigation directe selon le contexte
-      final targetPageType = this.targetPageType ?? 'category'; // Fallback par défaut
+      final targetPageType = this.targetPageType ?? 'city'; // Fallback par défaut
 
       if (targetPageType == 'city') {
         Navigator.of(context).pushReplacementNamed('/city');

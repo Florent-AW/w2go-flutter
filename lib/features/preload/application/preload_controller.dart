@@ -337,6 +337,10 @@ class PreloadController extends StateNotifier<PreloadData> {
       final carouselData = <String, List<ExperienceItem>>{...state.carouselData};
       final imageUrls = <String>[...state.criticalImageUrls];
 
+      // ✅ NOUVEAU : Séparer première catégorie (priorité) des autres
+      final firstCategory = targetCategories.isNotEmpty ? targetCategories.first : null;
+      final otherCategories = targetCategories.skip(1).toList();
+
       // Helper pour traiter une catégorie
       Future<void> warmCategory(Category category) async {
         try {
@@ -349,74 +353,75 @@ class PreloadController extends StateNotifier<PreloadData> {
             return;
           }
 
-          // Prendre la première section featured (priorité la plus haute)
-          final firstSection = sections.first;
-          final carouselKey = 'cat:${category.id}:featured:${firstSection.id}';
+          // ✅ NOUVEAU : Traiter TOUTES les sections featured (max 3)
+          for (final section in sections.take(3)) {
+            final carouselKey = 'cat:${category.id}:featured:${section.id}';
 
-          // Éviter les doublons
-          if (carouselData.containsKey(carouselKey)) {
-            print('⚠️ WARM FEATURED T2: ${category.name} déjà chargé');
-            return;
-          }
-
-          // Charger les données
-          const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
-          final isEvents = category.id == eventsCategoryId;
-
-          List<ExperienceItem> items;
-          if (isEvents) {
-            final events = await ref.read(getEventsUseCaseProvider).execute(
-              latitude: city.lat,
-              longitude: city.lon,
-              sectionId: firstSection.id,
-              categoryId: category.id,
-              limit: itemsPerCarousel,
-            );
-
-            if (events.isNotEmpty) {
-              ref.read(activityDistancesProvider.notifier).cacheActivitiesDistances(
-                events.map((event) => (
-                id: event.base.id,
-                lat: event.base.latitude,
-                lon: event.base.longitude,
-                )).toList(),
-              );
+            // Éviter les doublons
+            if (carouselData.containsKey(carouselKey)) {
+              print('⚠️ WARM FEATURED T2: ${category.name}/${section.title} déjà chargé');
+              continue;
             }
 
-            items = events.map((event) => ExperienceItem.event(event)).toList();
-          } else {
-            final activities = await ref.read(getActivitiesUseCaseProvider).execute(
-              latitude: city.lat,
-              longitude: city.lon,
-              sectionId: firstSection.id,
-              categoryId: category.id,
-              limit: itemsPerCarousel,
-            );
+            // Charger les données
+            const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
+            final isEvents = category.id == eventsCategoryId;
 
-            if (activities.isNotEmpty) {
-              ref.read(activityDistancesProvider.notifier).cacheActivitiesDistances(
-                activities.map((activity) => (
-                id: activity.base.id,
-                lat: activity.base.latitude,
-                lon: activity.base.longitude,
-                )).toList(),
+            List<ExperienceItem> items;
+            if (isEvents) {
+              final events = await ref.read(getEventsUseCaseProvider).execute(
+                latitude: city.lat,
+                longitude: city.lon,
+                sectionId: section.id, // ✅ Utiliser section.id
+                categoryId: category.id,
+                limit: itemsPerCarousel,
               );
-            }
 
-            items = activities.map((activity) => ExperienceItem.activity(activity)).toList();
-          }
-
-          if (items.isNotEmpty) {
-            carouselData[carouselKey] = items;
-
-            // Collecter URLs d'images (sans les précacher maintenant)
-            for (final item in items) {
-              if (item.mainImageUrl?.isNotEmpty == true) {
-                imageUrls.add(item.mainImageUrl!);
+              if (events.isNotEmpty) {
+                ref.read(activityDistancesProvider.notifier).cacheActivitiesDistances(
+                  events.map((event) => (
+                  id: event.base.id,
+                  lat: event.base.latitude,
+                  lon: event.base.longitude,
+                  )).toList(),
+                );
               }
+
+              items = events.map((event) => ExperienceItem.event(event)).toList();
+            } else {
+              final activities = await ref.read(getActivitiesUseCaseProvider).execute(
+                latitude: city.lat,
+                longitude: city.lon,
+                sectionId: section.id, // ✅ Utiliser section.id
+                categoryId: category.id,
+                limit: itemsPerCarousel,
+              );
+
+              if (activities.isNotEmpty) {
+                ref.read(activityDistancesProvider.notifier).cacheActivitiesDistances(
+                  activities.map((activity) => (
+                  id: activity.base.id,
+                  lat: activity.base.latitude,
+                  lon: activity.base.longitude,
+                  )).toList(),
+                );
+              }
+
+              items = activities.map((activity) => ExperienceItem.activity(activity)).toList();
             }
 
-            print('✅ WARM FEATURED T2: ${category.name} → ${items.length} items (clé: $carouselKey)');
+            if (items.isNotEmpty) {
+              carouselData[carouselKey] = items;
+
+              // Collecter URLs d'images (sans les précacher maintenant)
+              for (final item in items) {
+                if (item.mainImageUrl?.isNotEmpty == true) {
+                  imageUrls.add(item.mainImageUrl!);
+                }
+              }
+
+              print('✅ WARM FEATURED T2: ${category.name}/${section.title} → ${items.length} items (clé: $carouselKey)');
+            }
           }
 
         } catch (e) {
@@ -424,21 +429,38 @@ class PreloadController extends StateNotifier<PreloadData> {
         }
       }
 
-      // Traitement par batch avec concurrence limitée
-      final pending = [...targetCategories];
-      while (pending.isNotEmpty) {
-        final batch = pending.take(concurrency).toList();
-        pending.removeRange(0, batch.length);
-        await Future.wait(batch.map(warmCategory));
+      // ✅ ÉTAPE 1 : Traiter la PREMIÈRE catégorie en priorité (synchrone)
+      if (firstCategory != null) {
+        print('🎯 WARM FEATURED T2 PRIORITY: ${firstCategory.name} (première catégorie)');
+        await warmCategory(firstCategory);
 
-        // Mise à jour incrémentale
+        // Mise à jour immédiate après première catégorie
         state = state.copyWith(
           carouselData: carouselData,
           criticalImageUrls: imageUrls,
         );
+        print('✅ WARM FEATURED T2 PRIORITY: Première catégorie terminée');
       }
 
-      print('✅ WARM FEATURED T2 SILENTLY: ${carouselData.length - state.carouselData.length} nouveaux carousels chargés');
+      // ✅ ÉTAPE 2 : Traiter les autres catégories en parallèle (asynchrone)
+      if (otherCategories.isNotEmpty) {
+        print('📋 WARM FEATURED T2 BATCH: ${otherCategories.length} autres catégories');
+
+        final pending = [...otherCategories];
+        while (pending.isNotEmpty) {
+          final batch = pending.take(concurrency).toList();
+          pending.removeRange(0, batch.length);
+          await Future.wait(batch.map(warmCategory));
+
+          // Mise à jour incrémentale
+          state = state.copyWith(
+            carouselData: carouselData,
+            criticalImageUrls: imageUrls,
+          );
+        }
+      }
+
+      print('✅ WARM FEATURED T2 SILENTLY: ${targetCategories.length} catégories terminées');
 
     } catch (e) {
       print('❌ WARM FEATURED T2 SILENTLY: Erreur $e');
@@ -512,7 +534,6 @@ class PreloadController extends StateNotifier<PreloadData> {
       return null;
     }
   }
-
 
   /// Charge UNE catégorie avec ses VRAIES sections
   Future<void> _preloadSpecificCategoryWithRealSections(String categoryId, City city) async {

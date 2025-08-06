@@ -127,26 +127,30 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    // ✅ PROTECTION : Toujours créer le delegate
+    // ✅ TOUJOURS initialiser le cover controller
     try {
       // ✅ HEADER INSTANTANÉ avec preload
       final preloadData = ref.read(preloadControllerProvider);
       final categoryHeader = preloadData.categoryHeaders[widget.currentCategory.id];
 
-      // Utiliser header préchaché ou fallback
-      final displayTitle = categoryHeader?.title ?? widget.currentCategory.name;
-      final displayCoverUrl = categoryHeader?.coverUrl ?? widget.currentCategory.imageUrl;
-
-      // ✅ Mettre à jour le controller avec les données préchargées
-      coverController.updateCategoryWithPreload(
-        widget.currentCategory,
-        preloadTitle: displayTitle,
-        preloadCoverUrl: displayCoverUrl,
-      );
+      if (categoryHeader != null) {
+        // ✅ Utiliser données preload si disponibles
+        coverController.updateCategoryWithPreload(
+          widget.currentCategory,
+          preloadTitle: categoryHeader.title,
+          preloadCoverUrl: categoryHeader.coverUrl,
+        );
+        print('🎯 COVER INIT PRELOAD: ${categoryHeader.title}');
+      } else {
+        // ✅ Fallback normal si pas de preload
+        coverController.updateCategory(widget.currentCategory);
+        print('🎯 COVER INIT NORMAL: ${widget.currentCategory.name}');
+      }
 
     } catch (e) {
       print('⚠️ PRELOAD HEADER: Erreur récupération, fallback vers données normales: $e');
-      // Continue avec les données normales si preload échoue
+      // ✅ Fallback robuste en cas d'erreur
+      coverController.updateCategory(widget.currentCategory);
     }
 
     // ✅ TOUJOURS créer le delegate (même en cas d'erreur preload)

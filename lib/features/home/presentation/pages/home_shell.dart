@@ -12,6 +12,9 @@ import '../../../preload/application/preload_controller.dart';
 import '../../../categories/application/state/categories_provider.dart';
 import '../../../../core/domain/models/shared/city_model.dart';
 import '../../../../core/common/utils/image_provider_factory.dart';
+import '../../../../core/domain/models/shared/category_model.dart';
+import '../../../../core/domain/models/shared/category_view_model.dart';
+
 
 class HomeShell extends ConsumerStatefulWidget {
   /// Tab initial à afficher
@@ -76,6 +79,31 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         _onPreloadBecameReady();
       }
     });
+
+    // ✅ NOUVEAU : Détecter changement d'onglet vers CategoryPage
+    if (_currentTab != widget.initialTab &&
+        _currentTab == BottomNavTab.explorer &&
+        !_categoryBootstrapped) {
+
+      // Vérifier si CategoryPage déjà warm (venant de CityPage)
+      final preloadData = ref.read(preloadControllerProvider);
+      final hasCategoryHeaders = preloadData.categoryHeaders.isNotEmpty;
+      final hasFeaturedCarousels = preloadData.carouselData.keys
+          .any((key) => key.startsWith('cat:'));
+
+      if (hasCategoryHeaders && hasFeaturedCarousels) {
+        print('✅ TAB CHANGE DETECTION: CategoryPage déjà warm, bootstrap immédiat');
+
+        // Marquer comme bootstrappé immédiatement
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _categoryBootstrapped = true;
+            });
+          }
+        });
+      }
+    }
 
     final preloadData = ref.watch(preloadControllerProvider);
     final selectedCity = ref.watch(selectedCityProvider);
@@ -154,6 +182,20 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         selectedTab: _currentTab,
         onTabSelected: (tab) {
           if (tab != _currentTab) {
+            // ✅ NOUVEAU : Anticiper CategoryPage warm avant changement
+            if (tab == BottomNavTab.explorer && !_categoryBootstrapped) {
+              final preloadData = ref.read(preloadControllerProvider);
+              final hasCategoryHeaders = preloadData.categoryHeaders.isNotEmpty;
+              final hasFeaturedCarousels = preloadData.carouselData.keys
+                  .any((key) => key.startsWith('cat:'));
+
+              if (hasCategoryHeaders && hasFeaturedCarousels) {
+                print('✅ TAB ANTICIPATION: CategoryPage warm détecté, bootstrap préventif');
+                _categoryBootstrapped = true; // ✅ PAS de setState, juste le flag
+              }
+            }
+
+            // ✅ Changement d'onglet avec flag déjà préparé
             setState(() => _currentTab = tab);
           }
         },
@@ -204,6 +246,33 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   void _triggerCategoryPreload(City city) async {
     try {
       final selectedCategory = ref.read(selectedCategoryProvider);
+
+      // ✅ NOUVEAU : Vérifier si CategoryPage déjà warm (venant de CityPage)
+      final preloadData = ref.read(preloadControllerProvider);
+      final hasCategoryHeaders = preloadData.categoryHeaders.isNotEmpty;
+      final hasFeaturedCarousels = preloadData.carouselData.keys
+          .any((key) => key.startsWith('cat:'));
+
+      if (hasCategoryHeaders && hasFeaturedCarousels) {
+        // ✅ CategoryPage déjà warm → Skip preload, juste bootstrap flag
+        print('✅ CATEGORY WARM DETECTED: Skip preload, données déjà prêtes');
+
+        setState(() {
+          _categoryBootstrapped = true;
+        });
+
+        // ✅ Marquer comme ready pour lever overlay
+        if (preloadData.state != PreloadState.ready) {
+          // Forcer l'état ready si pas déjà (évite overlay bloqué)
+          Future.delayed(Duration.zero, () {
+            if (mounted) {
+              _onPreloadBecameReady();
+            }
+          });
+        }
+
+        return; // ✅ SORTIE : Pas de preload
+      }
 
       if (!_categoryBootstrapped) {
         // ✅ PREMIÈRE CATÉGORIE : Preload bloquant avec overlay
@@ -332,26 +401,80 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       if (!mounted) return;
       print('🎨 FADE OUT: Animation overlay');
 
-      // ✅ 1) Précache images critiques AVANT retrait overlay
-      final preloadData = ref.read(preloadControllerProvider);
-      await _precacheFirstBatchImages(context, preloadData.criticalImageUrls);
+      // 0) Lecture initiale (sera re-lue après warm)
+      var preloadData = ref.read(preloadControllerProvider);
 
-      // ✅ 2) Précache cover catégorie courante
+      // 1) Précache de la cover "de départ"
+      //    - Si une catégorie est déjà sélectionnée -> précache direct
+      //    - Sinon, si on arrive depuis CityPage -> warm + précache de la 1ʳᵉ catégorie
       final selectedCategory = ref.read(selectedCategoryProvider);
-      final categoryHeader = preloadData.categoryHeaders[selectedCategory?.id ?? ''];
-      if (categoryHeader?.coverUrl.isNotEmpty == true) {
-        try {
-          await precacheImage(
-              ImageProviderFactory.coverProvider(categoryHeader!.coverUrl, selectedCategory!.id),
-              context
-          );
-          print('🖼️ PRECACHED CURRENT COVER: ${categoryHeader.coverUrl}');
-        } catch (e) {
-          print('⚠️ PRECACHE CURRENT COVER FAILED: $e');
+      if (selectedCategory != null) {
+        final header = preloadData.categoryHeaders[selectedCategory.id];
+        final String? coverUrl = header?.coverUrl;
+        if (coverUrl != null && coverUrl.isNotEmpty) {
+          try {
+            print('🖼️ PRECACHING FIRST COVER: $coverUrl');
+            await precacheImage(
+              ImageProviderFactory.coverProvider(coverUrl, selectedCategory.id),
+              context,
+            );
+            print('✅ PRECACHED FIRST COVER: $coverUrl');
+          } catch (e) {
+            print('❌ PRECACHE FIRST COVER FAILED: $coverUrl - $e');
+          }
+        }
+      } else if (widget.initialTab == BottomNavTab.visiter) {
+        // Arrivée depuis CityPage sans catégorie sélectionnée
+        final selectedCity = ref.read(selectedCityProvider);
+        if (selectedCity != null) {
+          try {
+            // Typage explicite + gestion d’erreur propre
+            List<Category> categories;
+            try {
+              categories = await ref.read(categoriesProvider.future);
+            } catch (_) {
+              categories = <Category>[];
+            }
+
+            if (categories.isNotEmpty) {
+              final Category firstCat = categories.first;
+
+              // Charger le header si absent (ajoute aussi la cover aux criticalImageUrls)
+              final preload = ref.read(preloadControllerProvider);
+              if (!preload.categoryHeaders.containsKey(firstCat.id)) {
+                await ref
+                    .read(preloadControllerProvider.notifier)
+                    .warmCategoryHeadersSilently(selectedCity, <String>[firstCat.id], concurrency: 1);
+              }
+
+              // Précache la cover avec le même provider/clé que le rendu
+              final header = ref.read(preloadControllerProvider).categoryHeaders[firstCat.id];
+              final String? coverUrl = header?.coverUrl;
+              if (coverUrl != null && coverUrl.isNotEmpty) {
+                try {
+                  await precacheImage(
+                    ImageProviderFactory.coverProvider(coverUrl, firstCat.id),
+                    context,
+                  );
+                  print('✅ PRECACHED FIRST CATEGORY COVER: $coverUrl');
+                } catch (e) {
+                  print('❌ PRECACHE FIRST CATEGORY COVER FAILED: $coverUrl - $e');
+                }
+              }
+            }
+          } catch (e) {
+            print('⚠️ PRECACHE FIRST CATEGORY FROM CITY FAILED: $e');
+          }
         }
       }
 
-      // ✅ 3) Retirer overlay SEULEMENT après précache
+      // 2) Re-lecture du preload après warm (liste critique mise à jour)
+      preloadData = ref.read(preloadControllerProvider);
+
+      // 3) Précache batch des images critiques (T0) AVANT de retirer l’overlay
+      await _precacheFirstBatchImages(context, preloadData.criticalImageUrls);
+
+      // 4) Retrait de l’overlay (après précache)
       if (mounted) {
         setState(() {
           _overlayOpacity = 0.0;
@@ -369,29 +492,70 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         });
       }
 
+      // 5) Warm complémentaire après fade-out (structure + carrousels)
       Future.delayed(const Duration(milliseconds: 250), () async {
         if (!mounted) return;
 
-        // ✅ WARM T2 : Précharger featured carousels des autres catégories
         try {
           final selectedCity = ref.read(selectedCityProvider);
-          final currentCategory = ref.read(selectedCategoryProvider);
+          if (selectedCity == null) return;
 
-          if (selectedCity != null) {
-            print('🔥 HOME SHELL: Démarrage warm T2 featured carousels');
+          if (widget.initialTab == BottomNavTab.visiter) {
+            print('🔥 HOME SHELL (CITY): Démarrage warm CategoryPage');
 
-            await ref.read(preloadControllerProvider.notifier).warmFeaturedCarouselsSilently(
-              selectedCity,
-              excludeCategoryId: currentCategory?.id, // Exclure catégorie courante
-              itemsPerCarousel: 3,
-              concurrency: 3, // Moins agressif que T0
-            );
+            // a) Récupère les catégories
+            List<Category> categories;
+            try {
+              categories = await ref.read(categoriesProvider.future);
+            } catch (_) {
+              categories = <Category>[];
+            }
+            if (categories.isEmpty) return;
 
-            print('✅ HOME SHELL: Warm T2 terminé');
+            final List<String> categoryIds = categories.map((c) => c.id).toList(growable: false);
+            final String firstCategoryId = categories.first.id;
+
+            print('🎯 WARM: ${categoryIds.length} catégories (première: ${categories.first.name})');
+
+            // b) Warm headers (covers instantanés)
+            await ref
+                .read(preloadControllerProvider.notifier)
+                .warmCategoryHeadersSilently(selectedCity, categoryIds, concurrency: 3);
+
+            // c) Warm featured carousels (structure instantanée)
+            await ref
+                .read(preloadControllerProvider.notifier)
+                .warmFeaturedCarouselsSilently(selectedCity, itemsPerCarousel: 3, concurrency: 3);
+
+            // d) Vérification sans firstOrNull
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              final data = ref.read(preloadControllerProvider);
+              final firstHeader = data.categoryHeaders[firstCategoryId];
+
+              String? firstFeaturedKey;
+              for (final String key in data.carouselData.keys) {
+                if (key.startsWith('cat:$firstCategoryId:featured:')) {
+                  firstFeaturedKey = key;
+                  break;
+                }
+              }
+
+              final int featuredCount = (firstFeaturedKey != null)
+                  ? (data.carouselData[firstFeaturedKey]?.length ?? 0)
+                  : 0;
+
+              print('🔍 VERIF PREMIÈRE CATÉGORIE: '
+                  'header="${firstHeader?.title}" cover=${(firstHeader?.coverUrl.isNotEmpty ?? false)} '
+                  'featuredKey="$firstFeaturedKey" items=$featuredCount');
+            });
+
+            print('✅ HOME SHELL (CITY): Warm CategoryPage terminé');
+          } else if (widget.initialTab == BottomNavTab.explorer) {
+            // Depuis CategoryPage : déjà préchargé par T0
+            print('🔥 HOME SHELL (CATEGORY): Pas de warm nécessaire (déjà en T0)');
           }
         } catch (e) {
-          print('❌ HOME SHELL: Erreur warm T2: $e');
-          // Fail silencieusement, pas critique pour UX
+          print('❌ HOME SHELL WARM: Erreur $e');
         }
       });
     });

@@ -21,8 +21,11 @@ class CoverController extends ChangeNotifier {
 
   // ✅ CORRECTION + NOUVEAUX GETTERS : Accesseurs pour données préchargées
   String get displayTitle => _preloadTitle ?? _category.name;
-  String get displayCoverUrl => _preloadCoverUrl ?? _category.imageUrl;
-
+  String get displayCoverUrl {
+    final url = _preloadCoverUrl ?? _category.imageUrl;
+    print('🎯 COVER CONTROLLER URL: $url (preload: ${_preloadCoverUrl != null})');
+    return url;
+  }
   void updateCategory(CategoryViewModel newCategory) {
     if (_category.id != newCategory.id) {
       _previousCategory = _category;
@@ -49,24 +52,13 @@ class CoverController extends ChangeNotifier {
         required String preloadTitle,
         required String preloadCoverUrl,
       }) {
-    if (_category.id != newCategory.id) {
-      _previousCategory = _category;
-      _category = newCategory;
-      _isAnimating = true;
+    // ✅ TOUJOURS mettre à jour preload (même catégorie)
+    _category = newCategory;
+    _preloadTitle = preloadTitle;
+    _preloadCoverUrl = preloadCoverUrl;
 
-      // ✅ Conserver les données préchargées
-      _preloadTitle = preloadTitle;
-      _preloadCoverUrl = preloadCoverUrl;
-
-      print('🎯 COVER CONTROLLER: Header instantané pour $preloadTitle');
-      notifyListeners();
-
-      // Réinitialiser l'animation après un délai
-      Future.delayed(const Duration(milliseconds: 300), () {
-        _isAnimating = false;
-        notifyListeners();
-      });
-    }
+    print('🎯 COVER CONTROLLER PRELOAD: $preloadTitle → $preloadCoverUrl');
+    notifyListeners();
   }
 
   // ✅ NOUVEAU HELPER : Vérifie si on a des données préchargées

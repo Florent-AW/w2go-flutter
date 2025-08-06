@@ -53,14 +53,30 @@ class CategoryCoverWithTabsDelegate extends SliverPersistentHeaderDelegate {
         final previousCategory = controller.previousCategory;
         final isAnimating = controller.isAnimating;
 
+        // Clé de switch stable (par catégorie) pour déclencher un crossfade court,
+        // sans multiplier les reconstructions inutiles.
+        final coverSwitchKey = ValueKey<String>('cover_${category.id}');
+
         return Stack(
           children: [
-            // Cover en arrière-plan
+            // Cover en arrière-plan (crossfade court, fluide)
             Positioned.fill(
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
+                duration: const Duration(milliseconds: 180),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                layoutBuilder: (currentChild, previousChildren) {
+                  // Empile l'ancien et le nouveau afin d'éviter tout "trou" pendant le fade.
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      ...previousChildren,
+                      if (currentChild != null) currentChild,
+                    ],
+                  );
+                },
                 child: RepaintBoundary(
-                  key: ValueKey<String>(category.id),
+                  key: coverSwitchKey,
                   child: CategoryCoverDelegate(
                     category: category,
                     previousCategory: previousCategory,
@@ -73,7 +89,7 @@ class CategoryCoverWithTabsDelegate extends SliverPersistentHeaderDelegate {
               ),
             ),
 
-            // Texte de description
+            // Texte de description (mesuré + transition douce)
             Positioned(
               left: AppDimensions.space4,
               right: AppDimensions.space16,
@@ -81,12 +97,11 @@ class CategoryCoverWithTabsDelegate extends SliverPersistentHeaderDelegate {
               child: MeasuredSwitcher(
                 child: Consumer(
                   builder: (context, ref, _) {
-                    final descriptionAsync = ref.watch(
-                        categoryDepartmentDescriptionProvider(category)
-                    );
+                    final descriptionAsync =
+                    ref.watch(categoryDepartmentDescriptionProvider(category));
 
                     final textStyle = AppTypography.titleM(
-                        isDark: Theme.of(context).brightness == Brightness.dark
+                      isDark: Theme.of(context).brightness == Brightness.dark,
                     ).copyWith(
                       color: Colors.white,
                       shadows: [
@@ -99,25 +114,23 @@ class CategoryCoverWithTabsDelegate extends SliverPersistentHeaderDelegate {
                     );
 
                     return descriptionAsync.when(
-                      data: (description) {
-                        return Text(
-                          key: ValueKey<String>("desc_${category.id}_$description"),
-                          description,
-                          style: textStyle,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        );
-                      },
+                      data: (description) => Text(
+                        key: ValueKey<String>('desc_${category.id}_$description'),
+                        description,
+                        style: textStyle,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       loading: () => Text(
-                        key: ValueKey<String>("desc_loading_${category.id}"),
-                        category.description ?? "",
+                        key: ValueKey<String>('desc_loading_${category.id}'),
+                        category.description ?? '',
                         style: textStyle,
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                       ),
                       error: (_, __) => Text(
-                        key: ValueKey<String>("desc_error_${category.id}"),
-                        category.description ?? "",
+                        key: ValueKey<String>('desc_error_${category.id}'),
+                        category.description ?? '',
                         style: textStyle,
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
@@ -126,7 +139,9 @@ class CategoryCoverWithTabsDelegate extends SliverPersistentHeaderDelegate {
                   },
                 ),
               ),
-            ),            // Tabs
+            ),
+
+            // Tabs
             Positioned(
               left: 0,
               right: 0,
@@ -144,4 +159,5 @@ class CategoryCoverWithTabsDelegate extends SliverPersistentHeaderDelegate {
       },
     );
   }
+
 }
