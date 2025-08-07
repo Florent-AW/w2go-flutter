@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:animations/animations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:travel_in_perigord_app/core/common/utils/caching_image_provider.dart';
 import '../../../categories/presentation/pages/category_page.dart';
 import '../../../city_page/presentation/pages/city_page.dart';
 import '../../../shared_ui/presentation/widgets/organisms/generic_bottom_bar.dart';
@@ -13,8 +14,6 @@ import '../../../categories/application/state/categories_provider.dart';
 import '../../../../core/domain/models/shared/city_model.dart';
 import '../../../../core/common/utils/image_provider_factory.dart';
 import '../../../../core/domain/models/shared/category_model.dart';
-import '../../../../core/domain/models/shared/category_view_model.dart';
-
 
 class HomeShell extends ConsumerStatefulWidget {
   /// Tab initial à afficher
@@ -485,8 +484,19 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       // 2) Re-lecture du preload après warm (liste critique mise à jour)
       preloadData = ref.read(preloadControllerProvider);
 
-      // 3) Précache batch des images critiques (T0) AVANT de retirer l’overlay
-      await _precacheFirstBatchImages(context, preloadData.criticalImageUrls);
+       // 3) Batch équilibré : 3 images visibles par carrousel
+       const int imagesPerCarousel = 3;
+       final balancedUrls = _buildBalancedCriticalUrls(
+         preloadData,
+         imagesPerCarousel: imagesPerCarousel,
+       );
+
+       await _precacheFirstBatchImages(
+         context,
+         balancedUrls,
+         // on veut TOUTES celles qu’on vient de calculer
+         max: balancedUrls.length,
+       );
 
       // 4) Retrait de l’overlay (après précache)
       if (mounted) {
@@ -575,18 +585,55 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     });
   }
 
-  /// ✅ Helper : Précache lot d'images critiques (max 24)
-  Future<void> _precacheFirstBatchImages(BuildContext ctx, List<String> urls, {int max = 24}) async {
-    print('🖼️ PRECACHING T0: ${urls.take(max).length} images critiques');
-    for (final url in urls.take(max)) {
+  /// ✅ Helper : précache un lot d’images critiques
+  Future<void> _precacheFirstBatchImages(
+      BuildContext ctx,
+      List<String> urls, {
+        int max = 24,
+      }) async {
+    final batch = urls.take(max).toList();
+    debugPrint('🖼️ PRECACHING T0: ${batch.length} images (provider=CachingImageProvider)');
+
+    for (final url in batch) {
       try {
-        await precacheImage(ImageProviderFactory.thumbnailProvider(url), ctx);
-        print('✅ PRECACHED T0: $url');
+        // même provider que dans les cartes ⇢ clé de cache identique
+        final provider = CachingImageProvider.of(url);
+        await precacheImage(provider, ctx);
       } catch (e) {
-        print('⚠️ PRECACHE T0 FAILED: $url - $e');
+        debugPrint('⚠️ PRECACHE T0 FAILED: $url – $e');
       }
     }
-    print('✅ PRECACHING T0: Terminé');
+
+    debugPrint('✅ PRECACHING T0: Terminé');
   }
+
+  /// Construit un batch équilibré : 1ʳᵉ image de chaque carrousel,
+  /// puis 2ᵉ, etc.  -> nbCarrousels × imagesPerCarousel urls NON nulles.
+  List<String> _buildBalancedCriticalUrls(
+      PreloadData data, {
+        required int imagesPerCarousel,
+      }) {
+    // 1) Liste des listes, sans nulls
+    final List<List<String>> perCarousel = data.carouselData.values
+        .map((items) => items
+        .map((e) => e.mainImageUrl)          // String?           ↙︎
+        .whereType<String>()                 // garde les non-null
+        .take(imagesPerCarousel)
+        .toList())
+        .toList();
+
+    // 2) Zipper : c1-0, c2-0, … cN-0, c1-1...
+    final List<String> balanced = [];
+    for (int i = 0; i < imagesPerCarousel; i++) {
+      for (final list in perCarousel) {
+        if (i < list.length) balanced.add(list[i]);
+      }
+    }
+    return balanced;
+  }
+
+
+
+
 
 }
