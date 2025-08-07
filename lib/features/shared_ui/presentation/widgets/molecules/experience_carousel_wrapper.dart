@@ -2,17 +2,17 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:infinite_carousel/infinite_carousel.dart';
+import '../../../../categories/application/state/categories_provider.dart' show selectedCategoryProvider;
 import '../../../../preload/application/pagination_controller.dart';
 import '../../../../../core/domain/models/shared/experience_item.dart';
+import '../../../../../core/domain/models/shared/city_model.dart' show City;
+import '../../../../../core/domain/models/shared/category_model.dart' show Category;
 import '../../../../preload/application/preload_providers.dart';
 import '../../../../preload/application/preload_controller.dart';
-import '../../../../categories/application/state/categories_provider.dart';
-import '../../../../../core/domain/models/shared/category_model.dart';
+import '../../../../search/application/state/city_selection_state.dart';
 import '../organisms/generic_experience_carousel.dart';
 
-
-// lib/shared_ui/presentation/widgets/molecules/experience_carousel_wrapper.dart
 
 // ✅ 1. ENUM pour contexte carrousel (remplace toString() fragile)
 enum CarouselContext { city, categoryFeatured, categorySub }
@@ -63,49 +63,86 @@ class ExperienceCarouselWrapper extends ConsumerStatefulWidget {
 }
 
 class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWrapper> {
+  late InfiniteScrollController _scrollController;
+
+  String? _currentCarouselKey;
+
+  ProviderSubscription<PaginationState<ExperienceItem>>? _t1Sub;
+  ProviderSubscription<PreloadData>? _preloadSub;
+  ProviderSubscription<City?>? _citySub;
+  ProviderSubscription<Category?>? _catSub;
+
+  bool _t1InFlight = false;
   bool _hasInitialized = false;
+  bool _suspendOneFrame = false;   // masque 1 frame au switch
+  int _revision = 0;                // 🔑 incrémenté à chaque switch
+  bool _hasScrolled = false;
+
+
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // ✅ SUPPRIMÉ : Plus de ref.listen ici
+  }
 
-    // ✅ NOUVEAU : Écouter bootstrap completion pour re-injection
-    ref.listenManual(preloadControllerProvider, (previous, next) {
+  @override
+  void initState()
+  {
+    super.initState();
+    _currentCarouselKey = _buildCarouselKey(widget.providerParams);
+    _scrollController = InfiniteScrollController(initialItem: 0);
+    debugPrint('INIT  ⇢ rev=$_revision ctrl=${_scrollController.hashCode}');
+
+    _scrollController.addListener(() {
+      print('SCROLL ⇢ offset=${_scrollController.offset.toStringAsFixed(1)}''  rev=$_revision');
+          if (!_hasScrolled && _scrollController.hasClients && _scrollController.offset != 0.0) {
+        setState(() => _hasScrolled = true);
+      }
+    });
+
+    // Preload READY → tenter injection T0
+    _preloadSub = ref.listenManual(preloadControllerProvider, (previous, next) {
       if (previous?.state != PreloadState.ready && next.state == PreloadState.ready) {
-        print('🔄 WRAPPER BOOTSTRAP READY: Re-injection pour ${widget.title}');
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _attemptPreloadInjection();
-          }
+          if (mounted) _attemptPreloadInjection();
         });
       }
     });
 
-// ✅ NOUVEAU : Listener Featured spécifique pour carouselData updates
-    ref.listenManual(preloadControllerProvider, (prev, next) {
-      if (!mounted) return;
-      if (widget.carouselContext != CarouselContext.categoryFeatured) return;
-
-      final params = widget.providerParams as dynamic; // ✅ CORRECTION: dynamic au lieu de CategoryCarouselParams
-      final exactKey = 'cat:${params.categoryId}:featured:${params.sectionId}';
-
+    // Changement de ville → reset + réinjection
+    _citySub = ref.listenManual(selectedCityProvider, (prev, next) {
+      if (prev?.id != next?.id) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _resetPaginationForCityChange();
+          _attemptPreloadInjection();
+        });
+      }
     });
 
-    // ✅ REF.LISTEN catégorie (existant)
+    // Changement de catégorie (sur Category*) → index 0 + reset + réinjection
     if (widget.carouselContext != CarouselContext.city) {
-      ref.listenManual(selectedCategoryProvider, (previous, next) {
-        if (previous is Category? && next is Category?) {
-          if (previous?.id != next?.id) {
-            print('🔄 WRAPPER CATEGORY CHANGE: ${widget.title} - re-injection needed');
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                _attemptPreloadInjection();
-              }
-            });
-          }
+      _catSub = ref.listenManual(selectedCategoryProvider, (prev, next) {
+        if (prev?.id != next?.id) {
+
+           // 1️⃣  On est encore dans l’ancienne catégorie ⇒ offset à 0 tout de suite
+           if (_scrollController.hasClients) {
+             _scrollController.jumpToItem(0);   // synchro, pas d’animation
+           }
+           _hasScrolled = false;                // réinitialise le flag
+           _revision++;                         // invalide PageStorage + clés
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _resetPaginationForCategoryChange();
+            _attemptPreloadInjection();
+          });
         }
       });
     }
+
+    _wireT1Listener(); // abonne le listener T1 hors de build()
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && !_hasInitialized) {
@@ -115,117 +152,146 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
     });
   }
 
+
+
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // ✅ SUPPRIMÉ : Plus de ref.listen ici
+  void dispose() {
+    _t1Sub?.close();
+    _preloadSub?.close();
+    _citySub?.close();
+    _catSub?.close();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // ✅ pas d’accès à offset si le controller n’a pas encore de positions
+    final offsetText = _scrollController.hasClients
+        ? _scrollController.offset.toStringAsFixed(1)
+        : 'n/a';
+
+    debugPrint(
+      'BUILD ⇢ rev=$_revision key=$_currentCarouselKey offset=$offsetText',
+    );
     try {
-      final paginationState = ref.watch(widget.paginationProvider(widget.providerParams));
+      // 1. Contexte & clés
+      final city = ref.watch(selectedCityProvider);
+      final String logicalKey =
+          _currentCarouselKey ?? _buildCarouselKey(widget.providerParams);
+      final String wrapperKey =
+          'wrapper_${widget.heroPrefix}_${city?.id ?? 'none'}_${logicalKey}_$_revision';
 
-// ✅ T1 AUTOMATIQUE VIA REF.LISTEN (pattern unifié)
-      ref.listen<PaginationState<ExperienceItem>>(
-        widget.paginationProvider(widget.providerParams),
-            (previous, next) {
-          // ✅ CORRECTION : Détecter transition vers partiel (not previous.isPartial && next.isPartial)
-          if (previous != null && !previous.isPartial && next.isPartial) {
-            print('🔄 WRAPPER T1 REF.LISTEN: Détection false→true pour ${widget.title}');
+      // 2. Données
+      final paginationState =
+      ref.watch(widget.paginationProvider(widget.providerParams));
 
-            Future.delayed(const Duration(milliseconds: 1500), () {
-              if (mounted) {
-                try {
-                  print('🔄 WRAPPER T1 REF.LISTEN: Complétion pour ${widget.title}');
-                  ref.read(widget.paginationProvider(widget.providerParams).notifier).completeIfPartial();
-                } catch (e) {
-                  print('❌ WRAPPER T1: Erreur complétion ${widget.title}: $e');
-                }
-              }
-            });
-          }
-        },
-      );
-
-      // ✅ DONNÉES HYBRIDES : Pagination prioritaire, fallback si nécessaire
       final experiences = paginationState.items.isNotEmpty
           ? paginationState.items
           : widget.fallbackExperiences;
 
-      final isLoading = paginationState.isLoading;
-      final errorMessage = paginationState.error;
-
-      // Masquer si aucune donnée
-      if ((experiences?.isEmpty ?? true) && !isLoading) {
+      if ((experiences?.isEmpty ?? true) && !paginationState.isLoading) {
         return const SizedBox.shrink();
       }
 
-      return Container(
-        padding: EdgeInsets.only(bottom: 4.0),
-        child: GenericExperienceCarousel(
-          key: ValueKey('wrapper_${widget.heroPrefix}'),
-          title: widget.title,
-          experiences: experiences,
-          isLoading: isLoading,
-          errorMessage: errorMessage,
-          heroPrefix: widget.heroPrefix,
-          openBuilder: widget.openBuilder,
-          showDistance: widget.showDistance,
-          onLoadMore: () => _loadMoreExperiences(),
-          onSeeAllPressed: widget.onSeeAllPressed,
+      // ⚠️ Si le carrousel a déjà défilé ET qu’il redevient visible,
+      // on remplace le ScrollController pour qu’il reparte à 0 sans frame intermédiaire
+      if (_hasScrolled && _scrollController.hasClients && _scrollController.offset != 0.0) {
+        _scrollController.removeListener(() {});   // retire l’ancien listener
+        _scrollController.dispose();
+        _scrollController = InfiniteScrollController(initialItem: 0);
+        _hasScrolled = false;                      // reset le flag
+        _revision++;                   // 🔑 force une clé unique => rebuild complet
+
+      }
+
+      // 3. Carrousel
+      final carousel = GenericExperienceCarousel(
+        key: ValueKey(wrapperKey),
+        title: widget.title,
+        experiences: experiences,
+        isLoading: paginationState.isLoading,
+        errorMessage: paginationState.error,
+        heroPrefix: '${widget.heroPrefix}_$logicalKey',
+        openBuilder: widget.openBuilder,
+        showDistance: widget.showDistance,
+        onLoadMore: _loadMoreExperiences,
+        onSeeAllPressed: widget.onSeeAllPressed,
+        scrollController: _scrollController,
+        uniqueKey: '${city?.id ?? "none"}_${logicalKey}_${widget.title}_$_revision',
+      );
+
+      // 4. Masque 1 frame (anti-flash)
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 4.0),
+        child: AnimatedOpacity(
+          opacity: _suspendOneFrame ? 0.0 : 1.0,
+          duration: const Duration(milliseconds: 90),
+          curve: Curves.easeOut,
+          child: IgnorePointer(
+            ignoring: _suspendOneFrame,
+            child: carousel,
+          ),
         ),
       );
     } catch (e) {
-      print('❌ WRAPPER BUILD: Erreur ${widget.title}: $e');
-      // Fallback vers les données de secours
-      return Container(
-        padding: EdgeInsets.only(bottom: 4.0),
+      // 5. Fallback
+      final cityId = ref.read(selectedCityProvider)?.id ?? 'none';
+      final String logicalKey =
+          _currentCarouselKey ?? _buildCarouselKey(widget.providerParams);
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 4.0),
         child: GenericExperienceCarousel(
-          key: ValueKey('wrapper_fallback_${widget.heroPrefix}'),
+          key: ValueKey(
+            'wrapper_fallback_${widget.heroPrefix}_${cityId}_${logicalKey}_$_revision',
+          ),
           title: widget.title,
           experiences: widget.fallbackExperiences,
           isLoading: false,
-          heroPrefix: widget.heroPrefix,
+          heroPrefix: '${widget.heroPrefix}_$logicalKey',
           openBuilder: widget.openBuilder,
           showDistance: widget.showDistance,
           onSeeAllPressed: widget.onSeeAllPressed,
+          scrollController: _scrollController,
+
+          // clé unique : ville + logicalKey + titre + révision
+          uniqueKey: '${cityId}_${logicalKey}_${widget.title}_$_revision',
         ),
       );
+
+
     }
   }
 
-  /// ✅ CORRECTION T0 : méthode centralisée pour injection preload
+
+  /// Injection T0 sûre : reset scroll SYNCHRONE avant de muter le state
   void _attemptPreloadInjection() {
     try {
-      final controller = ref.read(widget.paginationProvider(widget.providerParams).notifier);
-      final currentState = ref.read(widget.paginationProvider(widget.providerParams));
+      final controller =
+      ref.read(widget.paginationProvider(widget.providerParams).notifier);
+      final currentState =
+      ref.read(widget.paginationProvider(widget.providerParams));
 
-      print('🔍 WRAPPER INJECTION ATTEMPT: ${widget.title}');
-      print('  - currentState.items.length: ${currentState.items.length}');
-      print('  - currentState.isLoading: ${currentState.isLoading}');
+      // 1️⃣ Pré-load disponible
+      final preloaded = _getPreloadedData();
+      if (preloaded != null && preloaded.isNotEmpty) {
+        // ⛔️ PAS de post-frame : on remet l’offset tout de suite
+        if (_scrollController.hasClients) _scrollController.jumpToItem(0);
 
-      // ✅ PRIORITÉ 1 : Données T0 préchargées (nouveau système)
-      final preloadedData = _getPreloadedData();
-      if (preloadedData?.isNotEmpty == true) {
-        print('🚀 WRAPPER T0 INJECTION: ${widget.title} avec ${preloadedData!.length} items T0');
-
-        // ✅ INJECTION T0 : items + isPartial=true + hasMore=true + isLoading=false
         controller.state = currentState.copyWith(
-          items: preloadedData,
-          isPartial: true, // ✅ TOUJOURS partiel pour T0 (permet T1)
-          currentOffset: preloadedData.length,
-          hasMore: true, // ✅ TOUJOURS plus de contenu disponible
-          isLoading: false, // ✅ PAS de loader pendant T0
+          items: preloaded,
+          isPartial: true,
+          currentOffset: preloaded.length,
+          hasMore: true,
+          isLoading: false,
         );
-
-        print('✅ WRAPPER T0 INJECTED: ${widget.title} → isPartial=true, hasMore=true');
-        return; // ✅ SORTIE : Pas besoin de fallback/loadPreload
+        return;
       }
 
-      // ✅ PRIORITÉ 2 : Fallback données existantes (ancien système)
+      // 2️⃣ Fallback local éventuel
       if (widget.fallbackExperiences?.isNotEmpty == true) {
-        print('🔄 WRAPPER FALLBACK INJECTION: ${widget.title} avec ${widget.fallbackExperiences!.length} items');
+        if (_scrollController.hasClients) _scrollController.jumpToItem(0);
 
         controller.state = currentState.copyWith(
           items: widget.fallbackExperiences!,
@@ -234,117 +300,220 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
           hasMore: true,
           isLoading: false,
         );
-        return; // ✅ SORTIE : Pas besoin de loadPreload
+        return;
       }
 
-      // ✅ PRIORITÉ 3 : LoadPreload classique (dernier recours)
+      // 3️⃣ Première requête réseau
       if (currentState.items.isEmpty && !currentState.isLoading) {
-        print('🚀 WRAPPER PAGINATION INIT: ${widget.title}');
         controller.loadPreload();
       }
-
     } catch (e) {
-      print('❌ WRAPPER INIT: Erreur ${widget.title}: $e');
+      print('❌ _attemptPreloadInjection: $e');
     }
   }
 
-  /// ✅ T2 LAZY LOADING (pattern unifié)
+
+
+
+  /// ✅ T2 LAZY LOADING (append)
   void _loadMoreExperiences() {
     try {
-      final controller = ref.read(widget.paginationProvider(widget.providerParams).notifier);
-      final currentState = ref.read(widget.paginationProvider(widget.providerParams));
+      final controller =
+      ref.read(widget.paginationProvider(widget.providerParams).notifier);
+      final currentState =
+      ref.read(widget.paginationProvider(widget.providerParams));
 
-      // ✅ GARDE ANTI-DUPLICATION (pattern CityPage)
+      // Garde anti-duplication (et évite d'empiler sur T0 en cours)
       if (currentState.isLoading || currentState.currentOffset == 0) {
-        print('⚠️ WRAPPER T2 SKIP: Preload en cours (isLoading=${currentState.isLoading}, offset=${currentState.currentOffset})');
+        print('⚠️ WRAPPER T2 SKIP: isLoading=${currentState.isLoading}, offset=${currentState.currentOffset}');
         return;
       }
 
       if (!currentState.isLoadingMore && currentState.hasMore) {
-        print('🚀 WRAPPER T2 LAZY LOADING: ${widget.title} - Chargement de la page suivante (offset=${currentState.currentOffset}) à ${DateTime.now().millisecondsSinceEpoch}');
         controller.loadMore();
-      } else {
-        print('⚠️ WRAPPER T2 SKIP: isLoadingMore=${currentState.isLoadingMore}, hasMore=${currentState.hasMore}');
+        print('🚀 WRAPPER T2: loadMore (offset=${currentState.currentOffset})');
       }
     } catch (e) {
       print('❌ WRAPPER T2: Erreur loadMore ${widget.title}: $e');
     }
   }
 
-  /// ✅ 3. HELPER UNIFIÉ pour calcul clé (même logique que PreloadController)
+  void _resetPaginationForCategoryChange() {
+    print('RESET CAT ⇢ rev=$_revision  offset=${_scrollController.offset}');
+    try {
+
+      // --- 0. Ramener immédiatement le carrousel à l’index 0 ----
+      if (_scrollController.hasClients) {
+         // ⛔️ Pas d’animation : on “téléporte” avant le prochain paint.
+        _scrollController.jumpToItem(0);
+       }
+
+      final notifier =
+      ref.read(widget.paginationProvider(widget.providerParams).notifier);
+
+      notifier.state = notifier.state.copyWith(
+        items: <ExperienceItem>[],
+        isPartial: false,
+        currentOffset: 0,
+        hasMore: true,
+        isLoading: false,
+        error: null,
+      );
+
+      _scrollController.dispose();
+      _scrollController = InfiniteScrollController(initialItem: 0);
+
+      // --- 1. Réinitialise l’état d’UI ---
+      setState(() {
+        _revision++; // force un nouveau key/hash
+        _hasScrolled = false;
+        _suspendOneFrame = true; // masque la frame suivante (sécurité visuelle)
+      });
+      // --- 2. Rétablit l’opacité après la frame masquée ---
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _suspendOneFrame = false);
+      });
+
+    } catch (e) {
+      print('❌ _resetPaginationForCategoryChange: $e');
+    }
+  }
+
+  /// Reset complet lorsqu’on change de ville (city switch)
+  void _resetPaginationForCityChange() {
+    try {
+      final notifier =
+      ref.read(widget.paginationProvider(widget.providerParams).notifier);
+
+      notifier.state = notifier.state.copyWith(
+        items: <ExperienceItem>[],
+        isPartial: false,
+        currentOffset: 0,
+        hasMore: true,
+        isLoading: false,
+        error: null,
+      );
+
+      // Nouveau scrollController déjà positionné à 0
+      _scrollController.dispose();
+      _scrollController = InfiniteScrollController(initialItem: 0);
+
+      // Révision pour invalider le PageStorageBucket
+      setState(() {
+        _revision++;      // <- incrémente à chaque changement de ville
+        _hasScrolled = false;
+      });
+    } catch (e) {
+      print('❌ _resetPaginationForCityChange: $e');
+    }
+  }
+
+
+
+  /// 🔑 Clé preload alignée avec PreloadController
   String _buildCarouselKey(dynamic params) {
     switch (widget.carouselContext) {
       case CarouselContext.city:
-      // Format : categoryId_sectionId
+      // city: "<categoryId>_<sectionId>"
         return '${params.categoryId}_${params.sectionId}';
-
       case CarouselContext.categoryFeatured:
-      // Format : cat:categoryId:featured:sectionId
+      // category featured: "cat:<categoryId>:featured:<sectionId>"
         return 'cat:${params.categoryId}:featured:${params.sectionId}';
-
       case CarouselContext.categorySub:
-      // Format : cat:categoryId:sub:subcategoryId:sectionId
+      // category sub: "cat:<categoryId>:sub:<subcategoryId>:<sectionId>"
         return 'cat:${params.categoryId}:sub:${params.subcategoryId}:${params.sectionId}';
     }
   }
 
-  /// Récupère les données préchargées depuis PreloadController si disponibles
+  /// 🧊 Lecture T0 uniquement quand le preload est READY (anti-bleed de ville)
   List<ExperienceItem>? _getPreloadedData() {
     try {
       final preloadData = ref.read(preloadControllerProvider);
+      final currentCity = ref.read(selectedCityProvider);
 
-      print('🔍 WRAPPER DEBUG DETAILED: ${widget.title}');
-      print('  - preload state: ${preloadData.state}');
-      print('  - context: ${widget.carouselContext}');
+      print('🔍 WRAPPER PRELOAD: ${widget.title} '
+          '(city=${currentCity?.id}/${currentCity?.cityName}, state=${preloadData.state})');
 
-      // ✅ 1. SUPPRESSION garde bloquante globale (sauf CityPage si nécessaire)
-      final isCity = widget.carouselContext == CarouselContext.city;
-      if (isCity && preloadData.state != PreloadState.ready) {
-        print('🔍 WRAPPER DEBUG: City preload not ready - state=${preloadData.state}');
+      if (preloadData.state != PreloadState.ready) {
+        // Pas d’injection tant que la ville courante n’est pas totalement préchargée
         return null;
       }
 
-      // ✅ UTILISER helper unifié pour clé
-      final carouselKey = _buildCarouselKey(widget.providerParams);
-      print('🔍 WRAPPER DEBUG: cherche clé "$carouselKey" pour ${widget.title}');
+      final key = _buildCarouselKey(widget.providerParams);
+      final data = preloadData.carouselData[key];
 
-      // ✅ AFFICHER toutes les clés disponibles pour debug
-      print('🔍 WRAPPER DEBUG: clés disponibles dans preload:');
-      for (final key in preloadData.carouselData.keys) {
-        final count = preloadData.carouselData[key]?.length ?? 0;
-        print('  - "$key": $count items');
-      }
-
-      // ✅ RÉCUPÉRER les vraies données (c'était ça le problème !)
-      final preloadedData = preloadData.carouselData[carouselKey];
-
-      if (preloadedData?.isNotEmpty == true) {
-        print('✅ WRAPPER PRELOAD FOUND: ${widget.title} → ${preloadedData!.length} items avec clé "$carouselKey"');
-        return preloadedData;
+      if (data != null && data.isNotEmpty) {
+        print('✅ PRELOAD HIT: "$key" → ${data.length} items');
+        return data;
       } else {
-        print('⚠️ WRAPPER PRELOAD NOT FOUND: ${widget.title} - clé "$carouselKey" vide ou inexistante');
+        print('⚠️ PRELOAD MISS: "$key"');
         return null;
       }
-
     } catch (e) {
-      print('❌ WRAPPER PRELOAD: Erreur récupération ${widget.title}: $e');
+      print('❌ PRELOAD READ ERROR (${widget.title}): $e');
       return null;
     }
   }
 
-  /// Détermine si les données préchargées sont partielles selon le plan
-  bool _isPreloadPartial(List<ExperienceItem> preloadedData) {
-    // Selon le plan différentiel :
-    // - Événements (carrousel 1) : 10 items → partiel (T1 possible)
-    // - Culture (carrousel 2) : 10 items → partiel (T1 possible)
-    // - Autres (carrousels 3-7) : 5 items → partiel (T1 nécessaire)
+  @override
+  void didUpdateWidget(covariant ExperienceCarouselWrapper oldWidget) {
+    super.didUpdateWidget(oldWidget);
 
-    if (preloadedData.length <= 5) {
-      return true; // Toujours partiel si 5 items ou moins
-    } else if (preloadedData.length == 10) {
-      return true; // 10 items = partiel pour permettre T1 → 25 items
-    } else {
-      return false; // Plus de 10 items = complet
+    final oldKey = _buildCarouselKey(oldWidget.providerParams);
+    final newKey = _buildCarouselKey(widget.providerParams);
+
+    if (newKey != oldKey) {
+      _currentCarouselKey = newKey;
+
+      _t1Sub?.close();
+      _scrollController.dispose();
+      _scrollController = InfiniteScrollController(initialItem: 0);
+
+      // ⬇️ masque une frame pour éviter le flash de l'ancienne position
+      setState(() => _suspendOneFrame = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _suspendOneFrame = false);
+      });
+
+      _resetPaginationForCategoryChange();
+      _attemptPreloadInjection();
+      _wireT1Listener();
     }
+
   }
+
+
+  void _wireT1Listener() {
+    // détacher l’ancien listener s’il existe
+    _t1Sub?.close();
+
+    _t1Sub = ref.listenManual<PaginationState<ExperienceItem>>(
+      widget.paginationProvider(widget.providerParams),
+          (previous, next) async {
+        if (!mounted) return;
+
+        // Détection T0 -> T1
+        if (previous != null && !previous.isPartial && next.isPartial) {
+          if (_t1InFlight) return; // déjà un append en cours
+          _t1InFlight = true;
+          try {
+            final controller =
+            ref.read(widget.paginationProvider(widget.providerParams).notifier);
+            final state = ref.read(widget.paginationProvider(widget.providerParams));
+
+            // Append-only si éligible
+            if (state.isPartial && !state.isLoading && !state.isLoadingMore && state.hasMore) {
+              await controller.loadMore();
+            }
+          } catch (_) {
+            // ignore
+          } finally {
+            _t1InFlight = false;
+          }
+        }
+      },
+    );
+  }
+
+
 }

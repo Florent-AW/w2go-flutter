@@ -344,7 +344,7 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
 
               // ✅ 3. Featured Activities - SIMPLIFIÉ avec Organism
               SliverToBoxAdapter(
-                key: const PageStorageKey('featured_section'),
+                key: PageStorageKey('featured_section_${widget.currentCategory.id}'),
                 child: RepaintBoundary(
                   child: Container(
                     child: Column(
@@ -433,7 +433,7 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
 
               // 5. Subcategory Activities - Déjà corrigé avec une clé constante
               SliverToBoxAdapter(
-                key: const PageStorageKey('subcategory_section'),
+                key: PageStorageKey('subcategory_section_${widget.currentCategory.id}'),
                 // Renommé pour plus de clarté
                 child: SubcategoryActivitiesSection(
                   openBuilder: widget.openBuilder,

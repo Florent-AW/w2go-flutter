@@ -655,6 +655,88 @@ class PreloadController extends StateNotifier<PreloadData> {
     }
   }
 
+  /// 🔇 Warm CityPage en arrière-plan (pas de changement d'état global)
+  Future<void> warmCityPageSilently(City city) async {
+    try {
+      // 1) Structure : mêmes catégories que _preloadCityPage
+      final allCategories = await ref.read(categoriesProvider.future);
+      if (allCategories.isEmpty) return;
+
+      const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
+
+      final activityCategories = allCategories
+          .where((cat) => cat.id != eventsCategoryId)
+          .take(6)
+          .toList();
+
+      final eventCategory = allCategories.where((cat) => cat.id == eventsCategoryId).isNotEmpty
+          ? allCategories.firstWhere((cat) => cat.id == eventsCategoryId)
+          : Category(id: eventsCategoryId, name: 'Événements');
+
+      // 2) Accumulateurs (ne pas écraser les données existantes)
+      final carouselData = <String, List<ExperienceItem>>{...state.carouselData};
+      final imageUrls = <String>[...state.criticalImageUrls];
+
+      // 2.a) Événements (clé city: "<categoryId>_<sectionId>")
+      const eventsSectionId = '7f94df23-ab30-4bf3-afb2-59320e5466a7';
+      final eventsKey = '${eventCategory.id}_$eventsSectionId';
+      if (!carouselData.containsKey(eventsKey) || (carouselData[eventsKey]?.isEmpty ?? true)) {
+        final eventsData = await _loadCarouselData(
+          city, eventCategory, eventsSectionId, 10, imageUrls,
+        );
+        carouselData[eventsKey] = eventsData;
+        state = state.copyWith(
+          carouselData: carouselData,
+          criticalImageUrls: imageUrls,
+        );
+      }
+
+      // 2.b) Activités (carrousels 2→7) : 10 items pour le premier, 5 pour les suivants
+      const activitiesSectionId = '5aa09feb-397a-4ad1-8142-7dcf0b2edd0f';
+      for (int i = 0; i < activityCategories.length; i++) {
+        final category = activityCategories[i];
+        final limit = i == 0 ? 10 : 5;
+        final key = '${category.id}_$activitiesSectionId';
+
+        if (carouselData.containsKey(key) && (carouselData[key]?.isNotEmpty ?? false)) {
+          continue; // évite doublons si déjà warm
+        }
+
+        final data = await _loadCarouselData(
+          city, category, activitiesSectionId, limit, imageUrls,
+        );
+        carouselData[key] = data;
+
+        // Mise à jour incrémentale pour réactivité
+        state = state.copyWith(
+          carouselData: carouselData,
+          criticalImageUrls: imageUrls,
+        );
+      }
+
+      // (pas de state=ready ici : warm silencieux)
+      print('✅ WARM CITY SILENT: ${carouselData.length} datasets, ${imageUrls.length} images');
+
+    } catch (e) {
+      print('❌ WARM CITY SILENT: $e');
+      // pas d’erreur remontee / pas de changement d’état
+    }
+  }
+
+
+  void resetForCity(City city) {
+    // on repart d'un état neutre, pour éviter tout bleed d'une autre ville
+    state = const PreloadData(
+      state: PreloadState.loading,
+      criticalImageUrls: [],
+      carouselsInfo: [],
+      carouselData: {},
+      categoryHeaders: {},
+    );
+    print('🧹 PRELOAD RESET for city: ${city.cityName}');
+  }
+
+
   /// Reset l'état
   void reset() {
     state = const PreloadData(state: PreloadState.idle);

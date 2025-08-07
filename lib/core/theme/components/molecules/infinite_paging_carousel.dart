@@ -46,6 +46,10 @@ class InfinitePagingCarousel<T> extends StatefulWidget {
   /// Fonction pour extraire l'URL d'image depuis un item
   final String? Function(T item)? getImageUrl;
 
+  /// Clé unique pour forcer la reconstruction du carousel
+  final String? uniqueKey;
+
+
   const InfinitePagingCarousel({
     super.key,
     required this.items,
@@ -58,6 +62,7 @@ class InfinitePagingCarousel<T> extends StatefulWidget {
     int? lookAhead,
     int? precacheAhead,
     this.getImageUrl,
+    this.uniqueKey,
   }) : lookAhead = lookAhead ?? InfinitePagingCarouselConfig.defaultLookAhead,
         precacheAhead = precacheAhead ?? InfinitePagingCarouselConfig.defaultPrecacheAhead;
 
@@ -73,8 +78,9 @@ class _InfinitePagingCarouselState<T> extends State<InfinitePagingCarousel<T>> {
   final Set<int> _triggeredOffsets = <int>{};
   final Set<String> _precachedUrls = <String>{};
 
-  // ✅ NOUVEAU : Tracker l'index absolu pour lazy-load correct
-  int _absoluteIndex = 1 << 20; // Commence au même niveau que initialItem
+  // Conserve l'itemExtent calculé dans build() pour l'utiliser dans les callbacks
+  double _itemExtent = 300.0;    // valeur de secours
+
 
   @override
   void initState() {
@@ -117,24 +123,23 @@ class _InfinitePagingCarouselState<T> extends State<InfinitePagingCarousel<T>> {
     if (!mounted || widget.items.isEmpty) return;
   }
 
-  /// ✅ CORRECTION : Utiliser index absolu pour lazy-load
+  /// Indexation absolue sans dépendre du contrôleur (zéro division par zéro)
   void _handleIndexChange(int itemIndex) {
     if (!mounted || widget.items.isEmpty) return;
 
-    // ✅ Calculer l'index absolu à partir de l'offset
-    final currentOffset = _infiniteController.offset;
-    final itemExtentEstimate = currentOffset > 0 ? currentOffset / itemIndex : 300.0;
-    final absoluteIndex = (currentOffset / itemExtentEstimate).round();
+    final offset = _infiniteController.offset;
+    final extent = _itemExtent > 0 ? _itemExtent : 300.0;
 
-    final logical = absoluteIndex % widget.items.length;
+    final absoluteIndex = (offset / extent).round();
+    final logicalIndex = absoluteIndex % widget.items.length;
 
-    if (_currentRealIndexNotifier.value != logical) {
-      _currentRealIndexNotifier.value = logical;
-
-      _checkLoadMore(absoluteIndex); // ✅ Passer l'index absolu
-      _precacheImages(logical);
+    if (_currentRealIndexNotifier.value != logicalIndex) {
+      _currentRealIndexNotifier.value = logicalIndex;
+      _checkLoadMore(absoluteIndex);
+      _precacheImages(logicalIndex);
     }
   }
+
 
   /// ✅ CORRECTION : Lazy loading sur index absolu, pas modulo
   void _checkLoadMore(int absoluteIndex) {
@@ -211,14 +216,20 @@ class _InfinitePagingCarouselState<T> extends State<InfinitePagingCarousel<T>> {
 
     return SizedBox(
       height: widget.height,
-      // ✅ CORRECTION : LayoutBuilder direct (pas AppDimensions.buildResponsiveCarousel)
       child: LayoutBuilder(
         builder: (context, constraints) {
           final cardWidth = AppDimensions.calculateCarouselCardWidth(constraints);
           final itemExtent = cardWidth + AppDimensions.spacingS;
+          _itemExtent = itemExtent;
+
+          // ✅ AJOUT : Key unique basée sur uniqueKey + items.length pour forcer reconstruction
+          final carouselKey = ValueKey<String>(
+              'carousel_${widget.uniqueKey ?? "default"}_${widget.items.length}_${widget.items.firstOrNull?.hashCode ?? 0}'
+          );
 
           return RepaintBoundary(
             child: InfiniteCarousel.builder(
+              key: carouselKey,  // ✅ KEY UNIQUE ICI
               controller: _infiniteController,
               itemCount: widget.items.length,
               itemExtent: itemExtent,
@@ -231,7 +242,6 @@ class _InfinitePagingCarouselState<T> extends State<InfinitePagingCarousel<T>> {
                 anchor: 0.0,
               ),
               itemBuilder: (context, itemIndex, realIndex) {
-                // ✅ GARDER : itemBuilder comme il est, mais modulo positif forcé
                 final logical = (realIndex % widget.items.length + widget.items.length) % widget.items.length;
                 final item = widget.items[logical];
 
@@ -248,7 +258,7 @@ class _InfinitePagingCarouselState<T> extends State<InfinitePagingCarousel<T>> {
               },
             ),
           );
-          },
+        },
       ),
     );
   }

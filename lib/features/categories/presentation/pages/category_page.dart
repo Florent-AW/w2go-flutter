@@ -24,6 +24,9 @@ class CategoryPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 👀 Regarder la ville pour déclencher un rebuild complet à chaque changement
+    final city = ref.watch(selectedCityProvider);
+
     // Récupérer les catégories
     final categoriesAsync = ref.watch(categoriesProvider);
 
@@ -37,36 +40,37 @@ class CategoryPage extends ConsumerWidget {
           );
         }
 
-        // ✅ DÉCLARATION NON-NULLABLE avec initialisation immédiate
+        // ✅ Catégorie courante (non-nullable) avec fallback sûr
         final Category currentCategory = categoryId != null
             ? categories.firstWhere(
               (category) => category.id == categoryId,
           orElse: () => categories.first,
         )
-            : ref.watch(selectedCategoryProvider) ?? categories.first;
+            : (ref.watch(selectedCategoryProvider) ?? categories.first);
 
-        // Mettre à jour la catégorie sélectionnée si nécessaire
+        // ✅ Synchroniser le provider de sélection si nécessaire (post-frame)
         final selectedCategory = ref.read(selectedCategoryProvider);
         if (selectedCategory?.id != currentCategory.id) {
           SchedulerBinding.instance.addPostFrameCallback((_) {
-            print('🔄 CATEGORY CHANGE: Mise à jour sélection pour ${currentCategory.name}');
+            // print('🔄 CATEGORY CHANGE: Mise à jour sélection pour ${currentCategory.name}');
             ref.read(selectedCategoryProvider.notifier).state = currentCategory;
-            // ✅ PAS d'invalidation providers - le wrapper gère l'injection via ref.listen
           });
         }
 
-        // Convertir les catégories au format attendu par le template
-        final categoryModels = categories.map((category) =>
-            CategoryViewModel(
-              id: category.id,
-              name: category.name,
-              imageUrl: category.coverUrl ?? '',
-              color: category.color ?? '#FFFFFF',
-              description: category.description,
-            )
-        ).toList();
+        // ViewModels pour le template
+        final List<CategoryViewModel> categoryModels = categories
+            .map(
+              (c) => CategoryViewModel(
+            id: c.id,
+            name: c.name,
+            imageUrl: c.coverUrl ?? '',
+            color: c.color ?? '#FFFFFF',
+            description: c.description,
+          ),
+        )
+            .toList(growable: false);
 
-        final currentCategoryModel = CategoryViewModel(
+        final CategoryViewModel currentCategoryModel = CategoryViewModel(
           id: currentCategory.id,
           name: currentCategory.name,
           imageUrl: currentCategory.coverUrl ?? '',
@@ -74,33 +78,35 @@ class CategoryPage extends ConsumerWidget {
           description: currentCategory.description,
         );
 
-        return CategoryPageTemplate(
-          currentCategory: currentCategoryModel,
-          allCategories: categoryModels,
-          onCategorySelected: (selectedCategory) {
-            // Trouver la catégorie complète
-            final fullCategory = categories.firstWhere(
-                  (c) => c.id == selectedCategory.id,
-              orElse: () => categories.first,
-            );
+        // 🗝️ Re-key du subtree par ville → force un rebuild propre des carrousels quand la ville change
+        return KeyedSubtree(
+          key: ValueKey<String>('category_template_city_${city?.id ?? 'none'}'),
+          child: CategoryPageTemplate(
+            currentCategory: currentCategoryModel,
+            allCategories: categoryModels,
+            onCategorySelected: (selectedCategoryVm) {
+              // Trouver la catégorie complète correspondante
+              final Category fullCategory = categories.firstWhere(
+                    (c) => c.id == selectedCategoryVm.id,
+                orElse: () => categories.first,
+              );
 
-            // Mettre à jour la sélection
-            ref.read(selectedCategoryProvider.notifier).state = fullCategory;
-          },
-          onSearchTap: () {
-            // Action de recherche à implémenter
-            // print('Recherche tappée dans la catégorie: ${currentCategory.name}');
-          },
-          openBuilder: (context, action, activity) {
-            // ✅ Créer ExperienceItem unifié
-            final experienceItem = ExperienceItem.activity(activity);
-
-            return ExperienceDetailPage(
-              experienceItem: experienceItem,
-              onClose: action,
-            );
-          },
-        );      },
+              // Mettre à jour la sélection
+              ref.read(selectedCategoryProvider.notifier).state = fullCategory;
+            },
+            onSearchTap: () {
+              // Action recherche (optionnel)
+            },
+            openBuilder: (context, action, activity) {
+              final experienceItem = ExperienceItem.activity(activity);
+              return ExperienceDetailPage(
+                experienceItem: experienceItem,
+                onClose: action,
+              );
+            },
+          ),
+        );
+      },
       loading: () => const Scaffold(
         body: Center(
           child: CircularProgressIndicator(),
@@ -113,4 +119,5 @@ class CategoryPage extends ConsumerWidget {
       ),
     );
   }
+
 }

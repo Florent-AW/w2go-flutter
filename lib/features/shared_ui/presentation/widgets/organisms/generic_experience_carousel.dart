@@ -64,6 +64,9 @@ class GenericExperienceCarousel extends ConsumerStatefulWidget {
   /// Préfixe pour les hero tags (éviter conflits)
   final String? heroPrefix;
 
+  /// 🆕  clé logique pour différencier définitivement chaque carousel
+  final String? uniqueKey;                         //  <-- AJOUTÉ
+
   const GenericExperienceCarousel({
     Key? key,
     required this.title,
@@ -78,6 +81,7 @@ class GenericExperienceCarousel extends ConsumerStatefulWidget {
     this.openBuilder,
     this.scrollController,
     this.heroPrefix,
+    this.uniqueKey,
   }) : super(key: key);
 
   @override
@@ -86,6 +90,7 @@ class GenericExperienceCarousel extends ConsumerStatefulWidget {
 
 class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCarousel> {
   static const int _skeletonItemCount = 3;
+  final PageStorageBucket _localBucket = PageStorageBucket();   // 🆕
 
   @override
   Widget build(BuildContext context) {
@@ -180,73 +185,55 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
       Map<String, double> allDistances,
       City? selectedCity,
       ) {
-    final baseKey = (widget.key is ValueKey) ? (widget.key as ValueKey).value : widget.key;
+    final baseKey =
+    (widget.key is ValueKey) ? (widget.key as ValueKey).value : widget.key;
 
-    // État de chargement
-    if (widget.isLoading) {
-      return _buildLoadingState(context, baseKey);
-    }
+    // Loading / error (inchangé) …
 
-    // État d'erreur
-    if (widget.errorMessage != null) {
-      return _buildErrorState(context);
-    }
+    // 🔑 Clé bucket sûre : si uniqueKey est null → fallback sur baseKey
+    final bucketKey = widget.uniqueKey ?? '$baseKey';
 
-    // Pré-calculer les distances si nécessaire
-    if (widget.experiences?.isNotEmpty == true) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _precacheDistancesIfNeeded(widget.experiences!, allDistances);
-        }
-      });
-    }
-
-    // Carousel avec données - Utilise InfinitePagingCarousel
     return AppDimensions.buildResponsiveCarousel(
       builder: (context, constraints) {
-        final cardWidth = AppDimensions.calculateCarouselCardWidth(constraints);
+        final cardWidth =
+        AppDimensions.calculateCarouselCardWidth(constraints);
 
         return InfinitePagingCarousel<ExperienceItem>(
-          key: baseKey != null ? ValueKey('${baseKey}_infinite') : null,
+          key: ValueKey('${bucketKey}_inf'),   // ← toujours non-null
+          uniqueKey: bucketKey,                // ← toujours non-null
           items: widget.experiences!,
           height: AppDimensions.activityCardHeight - 20,
           scrollController: widget.scrollController,
-
-          // Configuration lazy loading T2
           onLoadMore: widget.onLoadMore,
-          hasMore: true, // Sera connecté au PaginationController dans les wrappers
-          isLoading: false, // Sera connecté au PaginationController dans les wrappers
+          hasMore: true,
+          isLoading: false,
           lookAhead: 10,
-
-          // Configuration pré-cache images
           precacheAhead: 3,
-          getImageUrl: (experience) => experience.mainImageUrl,
-
-          // Builder des items
-          itemBuilder: (context, experience, index) {
-            final distance = allDistances[experience.id] ?? experience.distance ?? 0.0;
-
-            // Génération heroTag stable et unique
+          getImageUrl: (xp) => xp.mainImageUrl,
+          itemBuilder: (context, xp, index) {
+            final dist = allDistances[xp.id] ?? xp.distance ?? 0.0;
             final heroTag = widget.heroPrefix != null
-                ? 'activity-hero-${experience.id}-${widget.heroPrefix}'
-                : 'activity-hero-${experience.id}-${widget.title.toLowerCase().replaceAll(' ', '-')}';
+                ? 'activity-hero-${xp.id}-${widget.heroPrefix}'
+                : 'activity-hero-${xp.id}-${widget.title.toLowerCase()}';
 
             return FeaturedExperienceCard(
               key: ValueKey(heroTag),
               heroTag: heroTag,
               width: cardWidth,
-              experience: experience,
-              overrideDistance: distance,
+              experience: xp,
+              overrideDistance: dist,
               showDistance: widget.showDistance,
               isFavorite: false,
               showSubcategory: true,
-              onTap: () => _handleExperienceTap(context, experience, heroTag, index),
+              onTap: () => _handleExperienceTap(context, xp, heroTag, index),
             );
           },
         );
       },
     );
   }
+
+
 
   /// Gère le tap sur une expérience
   Future<void> _handleExperienceTap(

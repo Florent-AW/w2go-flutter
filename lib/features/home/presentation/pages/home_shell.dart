@@ -62,15 +62,28 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       });
     }
 
-    // ✅ Écouter changements de ville
+// ✅ Écouter changements de ville
     ref.listen<City?>(selectedCityProvider, (previous, next) {
       print('🔥 CITY CHANGE: ${previous?.cityName} → ${next?.cityName}');
 
       if (next != null && (previous == null || previous.id != next.id)) {
+        // 🔁 reset bootstrap + overlay
+        if (mounted) {
+          setState(() {
+            _categoryBootstrapped = false; // important pour afficher l’overlay sur Category
+            _isTransitioning = true;
+            _overlayOpacity = 1.0;
+          });
+        }
+
+        // 🧹 reset état preload (ancienne ville)
+        ref.read(preloadControllerProvider.notifier).resetForCity(next);
+
         print('🌍 TRIGGER: Preload pour ${next.cityName}');
         _triggerPreload(next);
       }
     });
+
 
     // ✅ Écouter fin preload pour lever overlay
     ref.listen<PreloadData>(preloadControllerProvider, (previous, next) {
@@ -208,7 +221,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     try {
       final targetPageType = _currentTab == BottomNavTab.visiter ? 'city' : 'category';
 
-      // ✅ Garde anti-doublon
       if (_lastPreloadCity?.id == city.id && _lastPreloadTarget == targetPageType) {
         print('⚠️ PRELOAD SKIP: Déjà lancé pour ${city.cityName} ($targetPageType)');
         return;
@@ -217,24 +229,26 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       _lastPreloadCity = city;
       _lastPreloadTarget = targetPageType;
 
-      // ✅ Reset overlay
       setState(() {
         _overlayOpacity = 1.0;
       });
 
       print('🚀 TRIGGER PRELOAD: ${city.cityName} → $targetPageType');
 
-      // ✅ API simplifiée selon type
       if (targetPageType == 'city') {
         ref.read(preloadControllerProvider.notifier).startPreload(city, 'city');
       } else {
-        // ✅ CategoryPage : utiliser API standard avec fallback
+        // ✅ 1) Preload Category (bloquant avec overlay)
         _triggerCategoryPreload(city);
+
+        // ✅ 2) EN PARALLÈLE : warm silencieux de CityPage pour accès instantané ensuite
+        Future.microtask(() {
+          ref.read(preloadControllerProvider.notifier).warmCityPageSilently(city);
+        });
       }
 
     } catch (e) {
       print('❌ TRIGGER PRELOAD: Erreur $e');
-      // Fallback : pas d'overlay si erreur
       setState(() {
         _isTransitioning = false;
         _overlayOpacity = 1.0;
