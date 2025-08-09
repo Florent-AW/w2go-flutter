@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:infinite_carousel/infinite_carousel.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../../common/utils/caching_image_provider.dart';
 import '../../app_dimensions.dart';
 import '../physics/threshold_40px_physics.dart';
 import '../physics/loop_snap_scroll_physics.dart';
@@ -199,7 +200,8 @@ class _InfinitePagingCarouselState<T> extends State<InfinitePagingCarousel<T>> {
         return;
       }
 
-      final provider = CachedNetworkImageProvider(imageUrl);
+      // Utiliser le même provider unifié pour cohérence de cache
+      final provider = CachingImageProvider.of(imageUrl);
       precacheImage(provider, context).then((_) {
         if (mounted) {
           _precachedUrls.add(imageUrl);

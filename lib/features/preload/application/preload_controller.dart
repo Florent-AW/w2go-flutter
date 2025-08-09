@@ -83,6 +83,22 @@ class PreloadController extends StateNotifier<PreloadData> {
 
   PreloadController(this.ref) : super(const PreloadData(state: PreloadState.idle));
 
+  /// Upsert de datasets de carrousels dans le store, optionnellement en READY.
+  void upsertCarousels(Map<String, List<ExperienceItem>> patch, {bool markReady = false}) {
+    try {
+      if (patch.isEmpty) return;
+      final merged = <String, List<ExperienceItem>>{...state.carouselData, ...patch};
+      final next = state.copyWith(
+        carouselData: merged,
+        state: markReady ? PreloadState.ready : state.state,
+      );
+      state = next;
+      print('✅ PRELOAD UPSERT: +${patch.length} datasets (ready=${markReady})');
+    } catch (e) {
+      print('❌ PRELOAD UPSERT ERROR: $e');
+    }
+  }
+
   /// ✅ API PRINCIPALE : Préchargement selon type de page
   Future<void> startPreload(City city, String targetPageType) async {
     print('🚀 PRELOAD: Démarrage pour ${city.cityName}, page: $targetPageType');

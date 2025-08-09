@@ -3,6 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skeletonizer/skeletonizer.dart';
+
+import 'package:travel_in_perigord_app/features/preload/preloader/subcategory_preloader.dart';
+
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_interactions.dart';
 import '../../../../../core/theme/app_dimensions.dart';
@@ -12,8 +15,11 @@ import '../../../../../core/domain/models/shared/subcategory_model.dart';
 import '../../../../../core/domain/models/activity/search/searchable_activity.dart';
 import '../../../../../core/common/utils/image_provider_factory.dart';
 import '../../../../search/application/state/city_selection_state.dart';
-import '../../../application/state/subcategories_provider.dart';
+import '../../../../categories/application/state/subcategories_provider.dart';
+import '../../../../preload/preloader/subcategory_preloader_wiring.dart';
 import '../../../../preload/application/preload_providers.dart';
+import '../../../../search/application/state/featured_sections_by_subcategory_provider.dart';
+import '../../../application/state/subcategories_provider.dart';
 import '../../controllers/cover_controller.dart';
 import '../atoms/subcategory_tab.dart';
 import '../delegates/subcategory_tabs_delegate.dart';
@@ -67,6 +73,8 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
 
   // Ajouter pour gérer les chips de sous-catégories
   final Map<String, List<GlobalKey>> _subcategoryChipKeys = {};
+
+  var currentSubcategoryProvider;
 
   @override
   void initState() {
@@ -156,6 +164,11 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
           preloadCoverUrl: categoryHeader.coverUrl,
         );
         print('🎯 COVER INIT PRELOAD: ${categoryHeader.title}');
+
+        // 🔔 T3: précharger les sous-catégories de la catégorie affichée
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _triggerT3Preload(widget.currentCategory.id);
+        });
       } else {
         // ✅ Fallback normal si pas de preload
         coverController.updateCategory(widget.currentCategory);
@@ -167,6 +180,18 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
       // ✅ Fallback robuste en cas d'erreur
       coverController.updateCategory(widget.currentCategory);
     }
+
+    // ✅ Câbler le préloader T3 pour la catégorie courante si la ville est connue
+    try {
+      final city = ref.read(selectedCityProvider);
+      if (city != null) {
+        wireSubcategoryPreloaderForCategory(
+          ref: ref,
+          city: city,
+          categoryId: widget.currentCategory.id,
+        );
+      }
+    } catch (_) {}
 
     // ✅ TOUJOURS créer le delegate (même en cas d'erreur preload)
     _coverDelegate = CategoryCoverWithTabsDelegate(
@@ -245,7 +270,21 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
     // 4) Notifier le parent
     widget.onCategorySelected(category);
 
-    // 5) Le scroll des tabs est géré par le delegate — no-op ici
+    final city = ref.read(selectedCityProvider);
+    final subcat = ref.read(currentSubcategoryProvider.select((s) => s?.id)); // adapte le provider/chemin
+
+    if (city != null && subcat != null) {
+      wireSubcategoryPreloaderWith(
+        ref: ref,
+        city: city,
+        categoryId: category.id,
+        subcategoryId: subcat,
+      );
+    }
+
+    // 5)🔔 T3: précharger les sous-catégories de la nouvelle catégorie
+    _triggerT3Preload(category.id);
+
 
 
     // 6) Fin d'animation inchangée
@@ -260,6 +299,21 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
       });
     });
   }
+
+  Future<void> _triggerT3Preload(String categoryId) async {
+    try {
+      print('[T3] 🔔 trigger depuis CategoryPageTemplate pour $categoryId');
+      await SubcategoryPreloader.instance.preloadForCategoryT3(
+        context: context,
+        categoryId: categoryId,
+      );
+    } catch (e, st) {
+      // Si les fetchers ne sont pas câblés, on log plutôt que crasher
+      print('[T3] ❌ preloadForCategoryT3 a échoué: $e');
+      print(st);
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
