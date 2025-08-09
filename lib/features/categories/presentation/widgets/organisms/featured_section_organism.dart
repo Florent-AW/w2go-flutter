@@ -105,8 +105,8 @@ class FeaturedSectionOrganism extends ConsumerWidget {
     final fallbackKey = 'cat:${currentCategory.id}:featured:${section.id}';
     final fallbackExperiences = preloadData.carouselData[fallbackKey];
 
-    // ✅ NOUVEAU : Titre stable (header preload prioritaire)
-    final stableTitle = categoryHeader?.title ?? section.title ?? 'À la une';
+    // ✅ Titre dynamique de la section en priorité (depuis Supabase)
+    final stableTitle = (section.title.isNotEmpty ? section.title : categoryHeader?.title) ?? 'À la une';
 
     return Container(
       margin: EdgeInsets.only(bottom: AppDimensions.spacingXs),

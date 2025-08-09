@@ -42,7 +42,16 @@ class SubcategoryPreloader {
           fetchItemsHead != null;
 
   bool _busy = false;
-  final _doneForCategory = <CategoryId>{};
+  final _doneForCategory = <String>{};
+  final _lastStart = <String, DateTime>{};
+  String _currentScope = 'global';
+
+  /// Définit un scope courant (ex: cityId) pour isoler l'idempotence par ville
+  void setScope(String scope) {
+    _currentScope = scope.isNotEmpty ? scope : 'global';
+  }
+
+  String _makeKey(CategoryId categoryId) => '${_currentScope}::${categoryId}';
 
   Future<void> preloadForCategoryT3({
     required BuildContext context,
@@ -56,14 +65,21 @@ class SubcategoryPreloader {
       return;
     }
 
-    // Idempotence + mutex global
-    if (_doneForCategory.contains(categoryId)) {
+    // Idempotence + mutex global (par scope)
+    final key = _makeKey(categoryId);
+    if (_doneForCategory.contains(key)) {
       debugPrint('[T3] ⏩ Déjà préchargée: $categoryId — skip.');
       return;
     }
     if (_busy) {
-      debugPrint('[T3] ⛔ Occupé par un autre préload — skip $categoryId.');
-      return;
+      // Laisser passer un redémarrage si le précédent a plus de 1.5s
+      final last = _lastStart[key];
+      if (last != null && DateTime.now().difference(last) > const Duration(seconds: 2)) {
+        debugPrint('[T3] ⏳ Previous busy expired — allow restart for $categoryId.');
+      } else {
+        debugPrint('[T3] ⛔ Occupé par un autre préload — skip $categoryId.');
+        return;
+      }
     }
 
     // Déballer proprement les fetchers (non-null à partir d’ici)
@@ -73,11 +89,12 @@ class SubcategoryPreloader {
 
     _busy = true;
     try {
+      _lastStart[key] = DateTime.now();
       // 1) Sous-catégories
       final subcats = await fSubcats(categoryId);
       debugPrint('[T3] 🔍 ${subcats.length} sous-catégories trouvées pour $categoryId.');
       if (subcats.isEmpty) {
-        _doneForCategory.add(categoryId);
+        _doneForCategory.add(key);
         return;
       }
 
@@ -95,7 +112,7 @@ class SubcategoryPreloader {
 
       if (carousels.isEmpty) {
         debugPrint('[T3] ⚠️ Aucun carousel trouvé — skip.');
-        _doneForCategory.add(categoryId);
+        _doneForCategory.add(key);
         return;
       }
 
@@ -128,7 +145,7 @@ class SubcategoryPreloader {
       );
 
       debugPrint('[T3] ✅ Préload terminé pour $categoryId.');
-      _doneForCategory.add(categoryId);
+      _doneForCategory.add(key);
     } catch (e, st) {
       debugPrint('[T3] 💥 Erreur préload $categoryId: $e');
       debugPrint(st.toString());
@@ -137,7 +154,7 @@ class SubcategoryPreloader {
     }
   }
 
-  void resetFor(CategoryId categoryId) => _doneForCategory.remove(categoryId);
+  void resetFor(CategoryId categoryId) => _doneForCategory.remove(_makeKey(categoryId));
   void resetAll() => _doneForCategory.clear();
 }
 

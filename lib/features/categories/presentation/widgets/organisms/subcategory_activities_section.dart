@@ -160,17 +160,21 @@ class SubcategoryActivitiesSection extends ConsumerWidget {
   }
 
   Widget _buildLoadingSkeleton(BuildContext context, Subcategory selectedSubcategory) {
+    // Afficher plusieurs carrousels skeleton pour stabiliser la structure
+    const int skeletonCount = 3;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(height: AppDimensions.spacingXs),
-        Container(
-          height: AppDimensions.activityCardHeight + AppDimensions.space20,
-          margin: EdgeInsets.only(bottom: AppDimensions.spacingXs),
-          child: const GenericExperienceCarousel(
-            title: 'Chargement sections...',
-            experiences: null,
-            isLoading: true,
+        ...List.generate(skeletonCount, (index) =>
+          Container(
+            height: AppDimensions.activityCardHeight + AppDimensions.space20,
+            margin: EdgeInsets.only(bottom: AppDimensions.spacingXs),
+            child: const GenericExperienceCarousel(
+              title: 'Chargement sections... ',
+              experiences: null,
+              isLoading: true,
+            ),
           ),
         ),
         const SizedBox(height: 80),

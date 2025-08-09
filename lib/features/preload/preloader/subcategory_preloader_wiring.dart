@@ -58,7 +58,7 @@ void wireSubcategoryPreloaderForCategory({
       final patch = <String, List<ExperienceItem>>{};
       for (final section in sections) {
         final items = experiencesBySection['section-${section.id}'];
-        if (items != null && items.isNotEmpty) {
+        if (items != null) {
           final key = 'cat:$categoryId:sub:$subcategoryId:${section.id}';
           patch[key] = items;
         }
@@ -137,7 +137,15 @@ void wireSubcategoryPreloaderWith({
       }
     } catch (_) {}
 
-    return sections.map((s) => CarouselSummary(s.id)).toList();
+    // Retourner aussi des URLs d'images premières si disponibles (facilite T3)
+    return sections.map((s) {
+      final items = experiencesBySection['section-${s.id}'] ?? const <ExperienceItem>[];
+      final firstTwo = items.take(2).toList();
+      return CarouselSummary(
+        s.id,
+        firstImageUrls: firstTwo.map((e) => e.mainImageUrl).whereType<String>().take(2).toList(),
+      );
+    }).toList();
   };
 
   // 3) Tête (2 items) pour (sectionId, sousCat)

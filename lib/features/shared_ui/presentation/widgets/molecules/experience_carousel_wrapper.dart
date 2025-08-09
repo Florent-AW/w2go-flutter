@@ -191,7 +191,22 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
       final effectiveIsLoading = paginationState.isLoading &&
           (itemsOrFallback == paginationState.items);
 
-      if ((itemsOrFallback?.isEmpty ?? true) && !effectiveIsLoading) {
+      if ((itemsOrFallback?.isEmpty ?? true)) {
+        // Afficher un skeleton uniquement si le chargement est en cours
+        if (paginationState.isLoading) {
+          return GenericExperienceCarousel(
+            key: ValueKey('loading_${widget.heroPrefix}_${logicalKey}_$_revision'),
+            title: widget.title,
+            experiences: null,
+            isLoading: true,
+            heroPrefix: '${widget.heroPrefix}_$logicalKey',
+            openBuilder: widget.openBuilder,
+            showDistance: widget.showDistance,
+            scrollController: _scrollController,
+            uniqueKey: '${ref.read(selectedCityProvider)?.id ?? "none"}_${logicalKey}_${widget.title}_$_revision',
+          );
+        }
+        // Sinon, masquer complètement les carrousels vides
         return const SizedBox.shrink();
       }
 
@@ -340,7 +355,7 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
         isPartial: false,
         currentOffset: 0,
         hasMore: true,
-        isLoading: false,
+        isLoading: true, // maintenir skeleton visible le temps de l'injection
         error: null,
       );
 
@@ -374,7 +389,7 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
         isPartial: false,
         currentOffset: 0,
         hasMore: true,
-        isLoading: false,
+        isLoading: true, // maintenir skeleton visible
         error: null,
       );
 

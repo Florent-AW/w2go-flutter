@@ -13,6 +13,7 @@ import '../../../../../core/theme/components/organisms/app_header.dart';
 import '../../../../../core/domain/models/shared/category_view_model.dart';
 import '../../../../../core/domain/models/shared/subcategory_model.dart';
 import '../../../../../core/domain/models/activity/search/searchable_activity.dart';
+import '../../../../../core/domain/models/shared/city_model.dart' show City;
 import '../../../../../core/common/utils/image_provider_factory.dart';
 import '../../../../search/application/state/city_selection_state.dart';
 import '../../../../categories/application/state/subcategories_provider.dart';
@@ -76,6 +77,12 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
 
   var currentSubcategoryProvider;
 
+  // Gestion offset via PageStorage (persiste entre reconstructions)
+  double _initialOffset = 0.0;
+
+  // Écoute changement de ville pour déclencher T3
+  ProviderSubscription<City?>? _citySub;
+
   @override
   void initState() {
     super.initState();
@@ -83,7 +90,14 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
     _tabScrollController = ScrollController();
     _subcategoryScrollController = ScrollController();
     _previousCategory = null;
-    _verticalController = ScrollController(keepScrollOffset: false);
+    // Restaurer offset: par catégorie si dispo, sinon dernier global
+    _initialOffset = _readStoredOffsetFor(widget.currentCategory.id) ??
+        _readLastGlobalOffset() ??
+        0.0;
+    _verticalController = ScrollController(
+      keepScrollOffset: true,
+      initialScrollOffset: _initialOffset,
+    );
     _categoryTabKeys.addAll(
         List.generate(widget.allCategories.length, (_) => GlobalKey())
     );
@@ -93,10 +107,47 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
       length: 1,
       vsync: this,
     );
+
+    // Écouter les changements de ville et déclencher le T3 de la catégorie courante
+    _citySub = ref.listenManual(selectedCityProvider, (previous, next) {
+      if (next != null && previous?.id != next.id) {
+        // Re-câbler le preloader et déclencher T3 pour la catégorie affichée
+        try {
+          // Scope par ville, puis re-wire
+          SubcategoryPreloader.instance.setScope(next.id);
+          wireSubcategoryPreloaderForCategory(
+            ref: ref,
+            city: next,
+            categoryId: widget.currentCategory.id,
+          );
+        } catch (_) {}
+        // Déclencher immédiatement (sans attendre frame), si le widget est monté
+        if (mounted) {
+          _triggerT3Preload(widget.currentCategory.id);
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
+    _citySub?.close();
+    try {
+      // Sauvegarder offset courant pour la catégorie active
+      if (_verticalController.hasClients) {
+        final bucket = PageStorage.of(context);
+        bucket?.writeState(
+          context,
+          _verticalController.position.pixels,
+          identifier: 'offset_${widget.currentCategory.id}',
+        );
+        bucket?.writeState(
+          context,
+          _verticalController.position.pixels,
+          identifier: 'last_global_offset',
+        );
+      }
+    } catch (_) {}
     _tabScrollController.dispose();
     _subcategoryScrollController.dispose();
     _subcategoryTabController.dispose();
@@ -132,17 +183,7 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
         );
       }
 
-      // reset header state pour être cohérent dès la 1ère frame
-      _isHeaderScrolled = false;
-
-      // reset scroll sans animation, et AVANT toute peinture
-      if (_verticalController.hasClients) {
-        _verticalController.jumpTo(0);
-      } else {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_verticalController.hasClients) _verticalController.jumpTo(0);
-        });
-      }
+      // Header scrolled recalculé sur prochaine frame via listener
     }
   }
 
@@ -185,15 +226,24 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
     try {
       final city = ref.read(selectedCityProvider);
       if (city != null) {
+        // Scope le preloader par ville pour réactiver T3 à chaque changement de ville
+        SubcategoryPreloader.instance.setScope(city.id);
         wireSubcategoryPreloaderForCategory(
           ref: ref,
           city: city,
           categoryId: widget.currentCategory.id,
         );
+
+        // ✅ Toujours déclencher T3 après wiring, même si le header n'est pas déjà préchauffé
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _triggerT3Preload(widget.currentCategory.id);
+          }
+        });
       }
     } catch (_) {}
 
-    // ✅ TOUJOURS créer le delegate (même en cas d'erreur preload)
+      // ✅ TOUJOURS créer le delegate (même en cas d'erreur preload)
     _coverDelegate = CategoryCoverWithTabsDelegate(
       controller: coverController,
       categories: widget.allCategories,
@@ -203,6 +253,25 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
       tabKeys: _categoryTabKeys,
       contextRef: context,
     );
+
+      // Appliquer initialScrollOffset si nécessaire (premier build)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_verticalController.hasClients) {
+          final bucket = PageStorage.of(context);
+          final stored = _readStoredOffsetFor(widget.currentCategory.id) ?? _readLastGlobalOffset();
+          if (stored != null) {
+            final max = _verticalController.position.maxScrollExtent;
+            final clamped = stored.clamp(0.0, max);
+            if ((_verticalController.position.pixels - clamped).abs() > 0.5) {
+              _verticalController.jumpTo(clamped);
+            }
+            setState(() {
+              _isHeaderScrolled = clamped > 150.0;
+            });
+          }
+        }
+      });
   }
 
 
@@ -354,7 +423,7 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
       context: context,
       removeTop: true,
       child: RepaintBoundary(
-        child: NotificationListener<ScrollNotification>(
+          child: NotificationListener<ScrollNotification>(
           onNotification: (notification) {
             if (notification is ScrollUpdateNotification &&
                 notification.depth ==
@@ -364,10 +433,26 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
               if (isScrolled != _isHeaderScrolled) {
                 setState(() => _isHeaderScrolled = isScrolled);
               }
+
+                // Mémoriser offsets (par catégorie + global) dans PageStorage
+                final bucket = PageStorage.of(context);
+                if (bucket != null) {
+                  bucket.writeState(
+                    context,
+                    notification.metrics.pixels,
+                    identifier: 'offset_${widget.currentCategory.id}',
+                  );
+                  bucket.writeState(
+                    context,
+                    notification.metrics.pixels,
+                    identifier: 'last_global_offset',
+                  );
+                }
             }
             return false;
           },
           child: CustomScrollView(
+              key: PageStorageKey('category_scroll_${widget.currentCategory.id}'),
             controller: _verticalController, // contrôleur dédié
             primary: false,                  // sinon le PrimaryScrollController reprend la main
             physics: scrollPhysics,
@@ -483,8 +568,28 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
     );
   }
 
-}
+  // Helpers de restauration d'offset
+  double? _readStoredOffsetFor(String categoryId) {
+    try {
+      final bucket = PageStorage.of(context);
+      final value = bucket?.readState(context, identifier: 'offset_$categoryId');
+      if (value is double) return value;
+      if (value is num) return value.toDouble();
+    } catch (_) {}
+    return null;
+  }
 
+  double? _readLastGlobalOffset() {
+    try {
+      final bucket = PageStorage.of(context);
+      final value = bucket?.readState(context, identifier: 'last_global_offset');
+      if (value is double) return value;
+      if (value is num) return value.toDouble();
+    } catch (_) {}
+    return null;
+  }
+
+}
 /// Delegate pour afficher un skeleton des onglets de sous-catégories
 class _SubcategoryTabsSkeletonDelegate extends SliverPersistentHeaderDelegate {
   final Color categoryColor;
