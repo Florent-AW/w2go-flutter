@@ -3,10 +3,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/scheduler.dart' show SchedulerBinding;
+import 'package:flutter/rendering.dart'; // RenderAbstractViewport + RevealedOffset
+
+
 import '../../../../../core/domain/models/shared/category_view_model.dart';
 import '../../../application/state/subcategories_provider.dart';
 import '../../constants/ui_constants.dart';
 import '../atoms/category_tab.dart';
+import 'package:flutter/foundation.dart'; // debugPrint
+
+const bool kTabsSmartLog = true;
+void _logTab(String msg) {
+  if (!kTabsSmartLog) return;
+  debugPrint('[TabsSmart] $msg');
+}
+
 
 
 /// Délégué pour l'affichage de la barre d'onglets de catégories
@@ -51,60 +63,91 @@ class CategoryTabsDelegate extends SliverPersistentHeaderDelegate {
   }
 
   @override
-  Widget build(
-      BuildContext context,
-      double shrinkOffset,
-      bool overlapsContent,
-      ) {
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+
+    // Index sélectionné (catégorie active)
+    final int selectedIndex =
+    categories.indexWhere((c) => c.id == selectedCategory.id);
+
+    // Auto-align discret après build (idempotent)
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _alignTabsToZone(selectedIndex, animate: false);
+    });
+
     return Container(
       height: tabHeight,
       alignment: Alignment.center,
       color: Colors.transparent,
-      // Ajouter un détecteur de geste pour bloquer le swipe horizontal
-      child: GestureDetector(
-        onHorizontalDragStart: (_) {
-          // Fournir un feedback haptique quand l'utilisateur essaie de swiper
-          HapticFeedback.lightImpact();
-        },
-        child: SingleChildScrollView(
-          controller: tabScrollController,
-          scrollDirection: Axis.horizontal,
-          physics: const ClampingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          child: Row(
-            children: List.generate(categories.length, (i) {
-              final category = categories[i];
-              final isSelected = category.id == selectedCategory.id;
+      child: SingleChildScrollView(
+        key: const PageStorageKey('category_tabs_scroll'),
+        controller: tabScrollController,
+        scrollDirection: Axis.horizontal,
+        physics: const ClampingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+        child: Row(
+          children: List.generate(categories.length, (i) {
+            final category = categories[i];
+            final isSelected = category.id == selectedCategory.id;
 
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2.0),
-                child: CategoryTab(
-                  key: tabKeys[i], // Utiliser la clé stable
-                  category: category,
-                  isActive: isSelected,
-                  onTap: () {
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2.0),
+              child: CategoryTab(
+                key: tabKeys[i], // clé stable pour ensureVisible
+                category: category,
+                isActive: isSelected,
+                  onTap: () async {
                     HapticFeedback.selectionClick();
-                    // Passer la catégorie et l'index
-                    onCategorySelected(category, i);
-
-                    // Ajouter le préchargement des catégories adjacentes
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      // Précharger la catégorie précédente si elle existe
-                      if (i > 0) {
-                        _prefetchCategory(context, categories[i - 1].id);
-                      }
-                      // Précharger la catégorie suivante si elle existe
-                      if (i < categories.length - 1) {
-                        _prefetchCategory(context, categories[i + 1].id);
-                      }
-                    });
-                  },
-                ),
-              );
-            }),
-          ),
-        ),      ),
+                    await _scrollTabsByZones(i); // ⬅️ d'abord on place la barre
+                    onCategorySelected(category, i); // ⬅️ puis on notifie
+                  }
+              ),
+            );
+          }),
+        ),
+      ),
     );
+  }
+
+  Future<void> _scrollTabsByZones(int index) async {
+    // Attendre que le controller soit attaché
+    for (int tries = 0; tries < 20; tries++) {
+      if (tabScrollController.hasClients &&
+          tabScrollController.position.context.notificationContext != null) {
+        break;
+      }
+      await SchedulerBinding.instance.endOfFrame;
+    }
+    await _alignTabsToZone(index, animate: true);
+  }
+
+  Future<void> _alignTabsToZone(int index, {required bool animate}) async {
+    if (!tabScrollController.hasClients) return;
+    final pos = tabScrollController.position;
+    if (pos.maxScrollExtent <= 0) return; // rien à scroller
+
+    // Zones demandées : 0..2 -> début, 3 -> milieu, 4+ -> fin
+    double target;
+    if (index <= 2) {
+      target = pos.minScrollExtent;
+    } else if (index == 3) {
+      target = pos.minScrollExtent + (pos.maxScrollExtent - pos.minScrollExtent) / 2;
+    } else {
+      target = pos.maxScrollExtent;
+    }
+
+    // Idempotent : on ne bouge que si nécessaire
+    final delta = (target - pos.pixels).abs();
+    if (delta <= 2.0) return;
+
+    if (animate) {
+      await tabScrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      tabScrollController.jumpTo(target);
+    }
   }
 
   @override

@@ -86,14 +86,18 @@ class _InfinitePagingCarouselState<T> extends State<InfinitePagingCarousel<T>> {
   void initState() {
     super.initState();
 
-    // ✅ CORRECTIF : Position initiale alignée sur le premier item
+    // ✅ Position initiale alignée sur le premier item
     final initialPosition = 0;
 
     _infiniteController = widget.scrollController ??
         InfiniteScrollController(initialItem: initialPosition);
 
     _currentRealIndexNotifier = ValueNotifier<int>(0);
+
+    // ✅ Ajout du listener (retiré dans dispose)
+    _infiniteController.addListener(_onScroll);
   }
+
 
   @override
   void dispose() {
@@ -145,16 +149,17 @@ class _InfinitePagingCarouselState<T> extends State<InfinitePagingCarousel<T>> {
   void _checkLoadMore(int absoluteIndex) {
     if (widget.onLoadMore == null || widget.isLoading || !widget.hasMore) return;
 
-    final totalItems = widget.items.length;
-    if (totalItems == 0) return;
+    final total = widget.items.length;
+    if (total == 0) return;
 
-    // ✅ NOUVEAU : Calculer combien d'items uniques on a vraiment vus
-    final itemsSeen = absoluteIndex - (1 << 20); // Soustraire la position initiale
-    final remaining = totalItems - itemsSeen;
+    // Index logique courant
+    final logicalIndex = _currentRealIndexNotifier.value;
+    final remaining = total - (logicalIndex + 1);
 
-    // ✅ CORRECTION : Ne déclencher que si on approche vraiment de la fin
-    if (remaining <= widget.lookAhead && itemsSeen > 0) {
-      final triggerKey = itemsSeen ~/ widget.lookAhead;
+    if (remaining <= widget.lookAhead) {
+      // Clé de déclenchement (une fois par "état de longueur")
+      final triggerToken = '$total:${(logicalIndex + 1) ~/ (widget.lookAhead == 0 ? 1 : widget.lookAhead)}';
+      final triggerKey = triggerToken.hashCode;
 
       if (!_triggeredOffsets.contains(triggerKey)) {
         _triggeredOffsets.add(triggerKey);

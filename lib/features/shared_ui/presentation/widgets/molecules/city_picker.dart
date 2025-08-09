@@ -8,6 +8,7 @@ import '../../../../../core/theme/app_dimensions.dart';
 import '../../../../../core/domain/models/shared/city_model.dart';
 import '../../../../search/application/state/city_selection_state.dart';
 import '../../../../search/application/state/place_details_notifier.dart';
+import '../../../../preload/application/preload_providers.dart';
 import '../../pages/city_picker_page.dart';
 
 /// Sélecteur de ville réutilisable
@@ -40,32 +41,39 @@ class CityPicker extends ConsumerWidget {
   });
 
   void _showCityPicker(BuildContext context, WidgetRef ref) async {
-    // Réinitialiser l'état du détail de lieu
+    // 1. reset éventuels de l’état « place details »
     ref.read(placeDetailsNotifierProvider.notifier).reset();
 
-    // Ouvrir CityPickerPage
+    // 2. ouvre la page de sélection
     final city = await Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (context) => const CityPickerPage(),
+        builder: (_) => const CityPickerPage(),
       ),
     );
 
-    // Vérifier si une ville a été sélectionnée
-    if (city != null && city is City) {
-      print('🎯 CITY PICKER: Ville sélectionnée: ${city.cityName}');
+    // 3. rien à faire si l’utilisateur annule
+    if (city == null || city is! City) return;
 
-      // ✅ NOUVEAU SYSTÈME : Mettre à jour le provider (déclenche le trigger universel)
-      ref.read(selectedCityProvider.notifier).selectCity(city);
+    // 4. écrit la ville sélectionnée
+    ref.read(selectedCityProvider.notifier).selectCity(city);
 
-      // ✅ Navigation directe selon le contexte
-      final targetPageType = this.targetPageType ?? 'city'; // Fallback par défaut
+    // --- 🔥 NOUVEAU : prépare le preload AVANT la navigation ----------
+    final preloadCtrl = ref.read(preloadControllerProvider.notifier);
 
-      if (targetPageType == 'city') {
-        Navigator.of(context).pushReplacementNamed('/city');
-      } else {
-        Navigator.of(context).pushReplacementNamed('/category');
-      }
+    // a) purge + passe l’état à `loading`
+    preloadCtrl.resetForCity(city);
+
+    // b) relance le vrai preload (page « city » ou « category »)
+    final pageType = targetPageType ?? 'city'; // 'city' par défaut
+    preloadCtrl.startPreload(city, pageType);
+    // ------------------------------------------------------------------
+
+    // 5. navigation finale (remplacement de la route courante)
+    if (pageType == 'city') {
+      Navigator.of(context).pushReplacementNamed('/city');
+    } else {
+      Navigator.of(context).pushReplacementNamed('/category');
     }
   }
 

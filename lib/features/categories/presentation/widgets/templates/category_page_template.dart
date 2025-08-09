@@ -60,6 +60,7 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
   late ScrollController _subcategoryScrollController;
   final List<GlobalKey> _categoryTabKeys = [];
   late TabController _subcategoryTabController;
+  late final ScrollController _verticalController;
   bool _isAnimating = false;
   bool _isHeaderScrolled = false;
   CategoryViewModel? _previousCategory;
@@ -74,6 +75,7 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
     _tabScrollController = ScrollController();
     _subcategoryScrollController = ScrollController();
     _previousCategory = null;
+    _verticalController = ScrollController(keepScrollOffset: false);
     _categoryTabKeys.addAll(
         List.generate(widget.allCategories.length, (_) => GlobalKey())
     );
@@ -90,6 +92,7 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
     _tabScrollController.dispose();
     _subcategoryScrollController.dispose();
     _subcategoryTabController.dispose();
+    _verticalController.dispose();
     super.dispose();
   }
 
@@ -119,6 +122,18 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
         _categoryTabKeys.addAll(
             List.generate(widget.allCategories.length, (_) => GlobalKey())
         );
+      }
+
+      // reset header state pour être cohérent dès la 1ère frame
+      _isHeaderScrolled = false;
+
+      // reset scroll sans animation, et AVANT toute peinture
+      if (_verticalController.hasClients) {
+        _verticalController.jumpTo(0);
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_verticalController.hasClients) _verticalController.jumpTo(0);
+        });
       }
     }
   }
@@ -163,39 +178,6 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
       tabKeys: _categoryTabKeys,
       contextRef: context,
     );
-  }
-
-  // Ajouter une méthode de centrage
-  void _centerCategoryTab(int index) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final tabKey = _categoryTabKeys[index];
-      final ctx = tabKey.currentContext;
-      if (ctx == null) return;
-
-      final renderTab = ctx.findRenderObject() as RenderBox?;
-      final renderTrack = _tabScrollController.position.context.storageContext
-          .findRenderObject() as RenderBox?;
-      if (renderTab == null || renderTrack == null) return;
-
-      // Calcul de l'offset pour centrer l'onglet horizontalement
-      final tabOffset = renderTab
-          .localToGlobal(Offset.zero, ancestor: renderTrack)
-          .dx;
-      final tabWidth = renderTab.size.width;
-      final viewportW = renderTrack.size.width;
-      final wanted = _tabScrollController.offset +
-          tabOffset - (viewportW - tabWidth) / 2;
-
-      // Animation horizontale uniquement
-      _tabScrollController.animateTo(
-        wanted.clamp(
-          _tabScrollController.position.minScrollExtent,
-          _tabScrollController.position.maxScrollExtent,
-        ),
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      );
-    });
   }
 
 
@@ -263,8 +245,8 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
     // 4) Notifier le parent
     widget.onCategorySelected(category);
 
-    // 5) Centrer la catégorie
-    _centerCategoryTab(index);
+    // 5) Le scroll des tabs est géré par le delegate — no-op ici
+
 
     // 6) Fin d'animation inchangée
     Future.delayed(AppInteractions.categoryContentFadeDelay, () {
@@ -332,8 +314,8 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
             return false;
           },
           child: CustomScrollView(
-            key: const PageStorageKey('category_scroll'),
-            primary: true,
+            controller: _verticalController, // contrôleur dédié
+            primary: false,                  // sinon le PrimaryScrollController reprend la main
             physics: scrollPhysics,
             slivers: [
               // Plus de SliverAppBar ici, commencer directement avec la cover

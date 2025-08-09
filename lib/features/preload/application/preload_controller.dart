@@ -222,27 +222,44 @@ class PreloadController extends StateNotifier<PreloadData> {
   Future<void> startPreloadCategory(City city, String categoryId) async {
     print('🚀 PRELOAD CATEGORY SPECIFIC: $categoryId pour ${city.cityName}');
 
+    // 1) Passe en LOADING (l’overlay écoute cet état)
     state = state.copyWith(state: PreloadState.loading);
 
     try {
-      // ✅ CORRECTION : Charger le header de la catégorie courante
+      // 2) Header catégorie (comme CityPage)
       final currentCategoryHeader = await _fetchCategoryHeader(city, categoryId);
       if (currentCategoryHeader != null) {
         final updatedHeaders = <String, CategoryHeader>{...state.categoryHeaders};
         updatedHeaders[categoryId] = currentCategoryHeader;
-
         state = state.copyWith(categoryHeaders: updatedHeaders);
         print('🎯 CURRENT CATEGORY HEADER: ${currentCategoryHeader.title} loaded');
       }
 
-      // Charger les carrousels
+      // 3) Charger les carrousels FEATURED réels (remplit aussi les URLs images)
       await _preloadSpecificCategoryWithRealSections(categoryId, city);
 
+      // 4) Sécuriser les URLs critiques T0 (si pas encore peuplées)
+      if (state.criticalImageUrls.isEmpty) {
+        final urls = <String>[];
+        state.carouselData.forEach((key, items) {
+          if (key.startsWith('cat:$categoryId:featured:')) {
+            for (final it in items.take(3)) {
+              final u = it.mainImageUrl;
+              if (u != null && u.isNotEmpty) urls.add(u);
+            }
+          }
+        });
+        state = state.copyWith(criticalImageUrls: urls);
+        print('🧩 CATEGORY T0 URLs: ${urls.length}');
+      }
+
+      // 5) READY → HomeShell déclenchera le fade-out + precache T0
       state = state.copyWith(state: PreloadState.ready);
       print('✅ PRELOAD CATEGORY SPECIFIC: Terminé');
     } catch (e) {
       print('❌ PRELOAD CATEGORY SPECIFIC: Erreur $e');
-      state = state.copyWith(state: PreloadState.ready); // Fail-open
+      // Fail-open pour éviter blocage overlay
+      state = state.copyWith(state: PreloadState.ready);
     }
   }
 
@@ -539,44 +556,88 @@ class PreloadController extends StateNotifier<PreloadData> {
   Future<void> _preloadSpecificCategoryWithRealSections(String categoryId, City city) async {
     try {
       const String eventsCategoryId = 'c3b42899-fdc3-48f7-bd85-09be3381aba9';
-      const limit = 3;
 
+      // on fusionne dans l’état existant (utile quand on change vite de ville)
+      final carouselData = <String, List<ExperienceItem>>{...state.carouselData};
       final imageUrls = <String>[...state.criticalImageUrls];
 
       print('🔄 PRELOAD SPECIFIC CATEGORY: $categoryId pour ${city.cityName}');
 
-      // ✅ ÉVÉNEMENTS : Section spéciale
-      if (categoryId == eventsCategoryId) {
-        try {
-          final eventsSectionId = '7f94df23-ab30-4bf3-afb2-59320e5466a7';
-
-        } catch (e) {
-          print('⚠️ PRELOAD EVENTS: Échec $e');
-        }
+      // 1) Sections "featured" de la cat.
+      final sections = await ref.read(featuredSectionsByCategoryProvider(categoryId).future);
+      if (sections.isEmpty) {
+        print('⚠️ PRELOAD FEATURED: aucune section pour $categoryId');
+        state = state.copyWith(carouselData: carouselData, criticalImageUrls: imageUrls);
+        return;
       }
-      // ✅ ACTIVITÉS : Section générale + subcategories
-      else {
-        try {
-          final activitiesSectionId = '5aa09feb-397a-4ad1-8142-7dcf0b2edd0f';
 
-          // ✅ CORRECTION : Vraies subcategories (pas d'IDs génériques)
-          try {
-            final subcategories = await ref.read(subCategoriesForCategoryProvider(categoryId).future);
-            print('📋 SUBCATEGORIES FOUND: ${subcategories.length} pour $categoryId');
+      // 2) Traiter jusqu’à 3 sections (10 items pour la 1ʳᵉ, 5 ensuite)
+      for (int i = 0; i < sections.length && i < 3; i++) {
+        final section = sections[i];
+        final key = 'cat:$categoryId:featured:${section.id}';
 
-          } catch (e) {
-            print('⚠️ PRELOAD SUBCATEGORIES: Pas de subcategories ou erreur: $e');
-            // Pas grave, on a au moins featured
+        if (carouselData.containsKey(key) && (carouselData[key]?.isNotEmpty ?? false)) {
+          // déjà peuplé (évite double fetch si arrivée simultanée)
+          continue;
+        }
+
+        final bool isEvents = categoryId == eventsCategoryId;
+        final int limit = i == 0 ? 10 : 5;
+
+        List<ExperienceItem> items = const [];
+
+        if (isEvents) {
+          final events = await ref.read(getEventsUseCaseProvider).execute(
+            latitude: city.lat,
+            longitude: city.lon,
+            sectionId: section.id,
+            categoryId: categoryId,
+            limit: limit,
+          );
+
+          if (events.isNotEmpty) {
+            ref.read(activityDistancesProvider.notifier).cacheActivitiesDistances(
+              events.map((e) => (id: e.base.id, lat: e.base.latitude, lon: e.base.longitude)).toList(),
+            );
+          }
+          items = events.map((e) => ExperienceItem.event(e)).toList();
+        } else {
+          final activities = await ref.read(getActivitiesUseCaseProvider).execute(
+            latitude: city.lat,
+            longitude: city.lon,
+            sectionId: section.id,
+            categoryId: categoryId,
+            limit: limit,
+          );
+
+          if (activities.isNotEmpty) {
+            ref.read(activityDistancesProvider.notifier).cacheActivitiesDistances(
+              activities.map((a) => (id: a.base.id, lat: a.base.latitude, lon: a.base.longitude)).toList(),
+            );
+          }
+          items = activities.map((a) => ExperienceItem.activity(a)).toList();
+        }
+
+        if (items.isNotEmpty) {
+          carouselData[key] = items;
+
+          // récupérer 1–3 images par carrousel (T0)
+          for (final it in items.take(3)) {
+            final u = it.mainImageUrl;
+            if (u != null && u.isNotEmpty) imageUrls.add(u);
           }
 
-        } catch (e) {
-          print('⚠️ PRELOAD ACTIVITIES: Échec $e');
+          print('✅ WARM FEATURED T2: $key → ${items.length} items');
+        } else {
+          print('⚠️ WARM FEATURED T2: $key → 0 item');
         }
       }
 
-      // ✅ DUPLICATION CITY pour compatibilité immédiate
-
-
+      // 3) Commit état (données + URLs critiques)
+      state = state.copyWith(
+        carouselData: carouselData,
+        criticalImageUrls: imageUrls,
+      );
     } catch (e) {
       print('❌ PRELOAD SPECIFIC CATEGORY: Erreur $e');
       rethrow;

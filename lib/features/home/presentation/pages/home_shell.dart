@@ -124,11 +124,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
 
 // ✅ OVERLAY : Uniquement avant bootstrap (première catégorie)
-    final shouldShowOverlay = selectedCity != null && (_isTransitioning || (
-        isCategoryTab
-            ? !_categoryBootstrapped  // ✅ Overlay uniquement avant bootstrap
-            : preloadData.state == PreloadState.loading  // City : garde l'ancien comportement
-    ));
+    final shouldShowOverlay = selectedCity != null &&
+        (_isTransitioning || preloadData.state == PreloadState.loading);
+
 
     return Scaffold(
       body: Stack(
@@ -326,58 +324,81 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     }
   }
 
-  /// ✅ Préchauffe les headers des catégories voisines en arrière-plan
+  /// ✅ Préchauffe headers + FEATURED carousels des autres catégories
+  /// + précache immédiat des vignettes (même logique que City)
   void _warmNextCategoriesInBackground(City city) async {
     try {
       // Récupérer toutes les catégories
       final categories = await ref.read(categoriesProvider.future);
       final selectedCategory = ref.read(selectedCategoryProvider);
-
       if (categories.length <= 1 || selectedCategory == null) return;
 
-      // Trouver les autres catégories (exclure la courante)
+      // Exclure la catégorie courante
       final otherCategoryIds = categories
           .where((c) => c.id != selectedCategory.id)
-          .take(7)
           .map((c) => c.id)
-          .toList();
-
+          .toList(growable: false);
       if (otherCategoryIds.isEmpty) return;
 
-      print('🔥 WARM HEADERS BACKGROUND: ${otherCategoryIds.length} catégories');
+      print('🔥 WARM BACKGROUND: headers + featured pour ${otherCategoryIds.length} catégories');
 
-      // ✅ NOUVEAU : Warm headers au lieu des carrousels complets
       final ctrl = ref.read(preloadControllerProvider.notifier);
+
+      // 1) Headers (titres + covers) — léger et rapide
       await ctrl.warmCategoryHeadersSilently(city, otherCategoryIds);
 
-      // ✅ NOUVEAU : Precaching des covers
-      if (mounted) {
-        final preloadData = ref.read(preloadControllerProvider);
-        final coverUrls = preloadData.coverUrlsFor(otherCategoryIds);
+      // 2) FEATURED carousels T2 — EXACTEMENT comme au cold start
+      await ctrl.warmFeaturedCarouselsSilently(
+        city,
+        excludeCategoryId: selectedCategory.id,
+        itemsPerCarousel: 3,
+        concurrency: 3,
+      );
 
-        print('🖼️ PRECACHING: ${coverUrls.length} covers');
-        for (final categoryId in otherCategoryIds) {
-          final categoryHeader = preloadData.categoryHeaders[categoryId];
-          if (categoryHeader?.coverUrl.isNotEmpty == true) {
-            try {
-              await precacheImage(
-                  ImageProviderFactory.coverProvider(
-                      categoryHeader!.coverUrl, categoryId),
-                  context
-              );
-              print('✅ PRECACHED: ${categoryHeader.coverUrl}');
-            } catch (e) {
-            }
+      // 3) ✅ PRECACHE des vignettes des AUTRES catégories (T0 bis)
+      //    -> on récolte 2–3 images par carrousel, "zippées" pour équilibrer
+      final data = ref.read(preloadControllerProvider);
+      const perCarousel = 3;
+      final List<List<String>> perCarouselUrls = [];
+
+      for (final catId in otherCategoryIds) {
+        data.carouselData.forEach((key, items) {
+          if (key.startsWith('cat:$catId:featured:') && items.isNotEmpty) {
+            final imgs = items
+                .map((e) => e.mainImageUrl)
+                .whereType<String>()
+                .take(perCarousel)
+                .toList();
+            if (imgs.isNotEmpty) perCarouselUrls.add(imgs);
           }
+        });
+      }
+
+      // Zipper : c1-0, c2-0, … cN-0, puis c1-1…
+      final urls = <String>[];
+      for (var i = 0; i < perCarousel; i++) {
+        for (final list in perCarouselUrls) {
+          if (i < list.length) urls.add(list[i]);
         }
       }
 
-      print('✅ WARM HEADERS BACKGROUND: Terminé');
+      if (urls.isNotEmpty) {
+        // Même provider que l’UI → même clé de cache
+        await CachingImageProvider.precacheMultiple(
+          urls,
+          context,
+          maxConcurrent: 4,
+        );
+        print('✅ WARM FEATURED IMAGES SILENT: ${urls.length} images');
+      }
 
+      print('✅ WARM BACKGROUND: terminé');
     } catch (e) {
-      print('❌ WARM HEADERS BACKGROUND: Erreur $e');
+      print('❌ WARM BACKGROUND: $e');
     }
   }
+
+
 
   /// Pages selon tab
   Widget _getPageForTab(BottomNavTab tab) {

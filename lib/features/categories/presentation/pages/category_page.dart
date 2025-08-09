@@ -24,7 +24,7 @@ class CategoryPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 👀 Regarder la ville pour déclencher un rebuild complet à chaque changement
+    // 👀 Rebuild complet à chaque changement de ville
     final city = ref.watch(selectedCityProvider);
 
     // Récupérer les catégories
@@ -34,13 +34,11 @@ class CategoryPage extends ConsumerWidget {
       data: (categories) {
         if (categories.isEmpty) {
           return const Scaffold(
-            body: Center(
-              child: Text('Aucune catégorie disponible'),
-            ),
+            body: Center(child: Text('Aucune catégorie disponible')),
           );
         }
 
-        // ✅ Catégorie courante (non-nullable) avec fallback sûr
+        // ✅ Catégorie courante (fallback sûr)
         final Category currentCategory = categoryId != null
             ? categories.firstWhere(
               (category) => category.id == categoryId,
@@ -48,26 +46,23 @@ class CategoryPage extends ConsumerWidget {
         )
             : (ref.watch(selectedCategoryProvider) ?? categories.first);
 
-        // ✅ Synchroniser le provider de sélection si nécessaire (post-frame)
+        // ✅ Synchroniser la sélection si nécessaire (post-frame)
         final selectedCategory = ref.read(selectedCategoryProvider);
         if (selectedCategory?.id != currentCategory.id) {
           SchedulerBinding.instance.addPostFrameCallback((_) {
-            // print('🔄 CATEGORY CHANGE: Mise à jour sélection pour ${currentCategory.name}');
             ref.read(selectedCategoryProvider.notifier).state = currentCategory;
           });
         }
 
-        // ViewModels pour le template
+        // ViewModels
         final List<CategoryViewModel> categoryModels = categories
-            .map(
-              (c) => CategoryViewModel(
-            id: c.id,
-            name: c.name,
-            imageUrl: c.coverUrl ?? '',
-            color: c.color ?? '#FFFFFF',
-            description: c.description,
-          ),
-        )
+            .map((c) => CategoryViewModel(
+          id: c.id,
+          name: c.name,
+          imageUrl: c.coverUrl ?? '',
+          color: c.color ?? '#FFFFFF',
+          description: c.description,
+        ))
             .toList(growable: false);
 
         final CategoryViewModel currentCategoryModel = CategoryViewModel(
@@ -78,25 +73,22 @@ class CategoryPage extends ConsumerWidget {
           description: currentCategory.description,
         );
 
-        // 🗝️ Re-key du subtree par ville → force un rebuild propre des carrousels quand la ville change
+        // 🗝️ Re-key par ville + catégorie → reset total des states internes
+        final cityId = city?.id ?? 'none';
+        final catId = currentCategory.id;
         return KeyedSubtree(
-          key: ValueKey<String>('category_template_city_${city?.id ?? 'none'}'),
+          key: ValueKey<String>('category_template_city_${cityId}_cat_$catId'),
           child: CategoryPageTemplate(
             currentCategory: currentCategoryModel,
             allCategories: categoryModels,
             onCategorySelected: (selectedCategoryVm) {
-              // Trouver la catégorie complète correspondante
               final Category fullCategory = categories.firstWhere(
                     (c) => c.id == selectedCategoryVm.id,
                 orElse: () => categories.first,
               );
-
-              // Mettre à jour la sélection
               ref.read(selectedCategoryProvider.notifier).state = fullCategory;
             },
-            onSearchTap: () {
-              // Action recherche (optionnel)
-            },
+            onSearchTap: () {},
             openBuilder: (context, action, activity) {
               final experienceItem = ExperienceItem.activity(activity);
               return ExperienceDetailPage(
@@ -108,16 +100,13 @@ class CategoryPage extends ConsumerWidget {
         );
       },
       loading: () => const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
+        body: Center(child: CircularProgressIndicator()),
       ),
       error: (error, stackTrace) => Scaffold(
-        body: Center(
-          child: Text('Erreur: $error'),
-        ),
+        body: Center(child: Text('Erreur: $error')),
       ),
     );
   }
+
 
 }

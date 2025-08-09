@@ -185,23 +185,33 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
       Map<String, double> allDistances,
       City? selectedCity,
       ) {
-    final baseKey =
-    (widget.key is ValueKey) ? (widget.key as ValueKey).value : widget.key;
+    final baseKey = (widget.key is ValueKey) ? (widget.key as ValueKey).value : widget.key;
 
-    // Loading / error (inchangé) …
+    // ✅ 1) Loading → skeletons
+    if (widget.isLoading) {
+      return _buildLoadingState(context, baseKey);
+    }
 
-    // 🔑 Clé bucket sûre : si uniqueKey est null → fallback sur baseKey
+    // ✅ 2) Error → message
+    if (widget.errorMessage != null) {
+      return _buildErrorState(context);
+    }
+
+    // ✅ 3) Empty → rien
+    final items = widget.experiences;
+    if (items == null || items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // ✅ 4) Données → vrai carousel
     final bucketKey = widget.uniqueKey ?? '$baseKey';
-
     return AppDimensions.buildResponsiveCarousel(
       builder: (context, constraints) {
-        final cardWidth =
-        AppDimensions.calculateCarouselCardWidth(constraints);
-
+        final cardWidth = AppDimensions.calculateCarouselCardWidth(constraints);
         return InfinitePagingCarousel<ExperienceItem>(
-          key: ValueKey('${bucketKey}_inf'),   // ← toujours non-null
-          uniqueKey: bucketKey,                // ← toujours non-null
-          items: widget.experiences!,
+          key: ValueKey('${bucketKey}_inf'),
+          uniqueKey: bucketKey,
+          items: items,
           height: AppDimensions.activityCardHeight - 20,
           scrollController: widget.scrollController,
           onLoadMore: widget.onLoadMore,
@@ -209,13 +219,12 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
           isLoading: false,
           lookAhead: 10,
           precacheAhead: 3,
-          getImageUrl: (xp) => xp.mainImageUrl,
+          getImageUrl: (xp) => xp.mainImageUrl ?? 'https://picsum.photos/400/240',
           itemBuilder: (context, xp, index) {
             final dist = allDistances[xp.id] ?? xp.distance ?? 0.0;
             final heroTag = widget.heroPrefix != null
                 ? 'activity-hero-${xp.id}-${widget.heroPrefix}'
                 : 'activity-hero-${xp.id}-${widget.title.toLowerCase()}';
-
             return FeaturedExperienceCard(
               key: ValueKey(heroTag),
               heroTag: heroTag,
@@ -232,6 +241,7 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
       },
     );
   }
+
 
 
 
@@ -279,6 +289,9 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
   Widget _buildLoadingState(BuildContext context, dynamic baseKey) {
     return AppDimensions.buildResponsiveCarousel(
       builder: (context, constraints) {
+        if (constraints.maxWidth == 0) {
+          return const SizedBox(); // ou un loader/skeleton temporaire
+        }
         final cardWidth = AppDimensions.calculateCarouselCardWidth(constraints);
         final itemExtent = cardWidth + AppDimensions.spacingS;
 

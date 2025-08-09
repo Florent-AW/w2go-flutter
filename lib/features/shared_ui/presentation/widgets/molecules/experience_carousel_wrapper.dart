@@ -87,16 +87,16 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
   }
 
   @override
-  void initState()
-  {
+  void initState() {
     super.initState();
     _currentCarouselKey = _buildCarouselKey(widget.providerParams);
     _scrollController = InfiniteScrollController(initialItem: 0);
     debugPrint('INIT  ⇢ rev=$_revision ctrl=${_scrollController.hashCode}');
 
     _scrollController.addListener(() {
-      print('SCROLL ⇢ offset=${_scrollController.offset.toStringAsFixed(1)}''  rev=$_revision');
-          if (!_hasScrolled && _scrollController.hasClients && _scrollController.offset != 0.0) {
+      // ✅ LOG corrigé (chaîne bien formée)
+      print('SCROLL ⇢ offset=${_scrollController.offset.toStringAsFixed(1)}  rev=$_revision');
+      if (!_hasScrolled && _scrollController.hasClients && _scrollController.offset != 0.0) {
         setState(() => _hasScrolled = true);
       }
     });
@@ -125,13 +125,11 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
     if (widget.carouselContext != CarouselContext.city) {
       _catSub = ref.listenManual(selectedCategoryProvider, (prev, next) {
         if (prev?.id != next?.id) {
-
-           // 1️⃣  On est encore dans l’ancienne catégorie ⇒ offset à 0 tout de suite
-           if (_scrollController.hasClients) {
-             _scrollController.jumpToItem(0);   // synchro, pas d’animation
-           }
-           _hasScrolled = false;                // réinitialise le flag
-           _revision++;                         // invalide PageStorage + clés
+          if (_scrollController.hasClients) {
+            _scrollController.jumpToItem(0); // synchro, pas d’animation
+          }
+          _hasScrolled = false;
+          _revision++; // invalide PageStorage + clés
 
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
@@ -154,6 +152,7 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
 
 
 
+
   @override
   void dispose() {
     _t1Sub?.close();
@@ -171,57 +170,48 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
         ? _scrollController.offset.toStringAsFixed(1)
         : 'n/a';
 
-    debugPrint(
-      'BUILD ⇢ rev=$_revision key=$_currentCarouselKey offset=$offsetText',
-    );
+    debugPrint('BUILD ⇢ rev=$_revision key=$_currentCarouselKey offset=$offsetText');
     try {
-      // 1. Contexte & clés
+      // 1) Contexte & clés
       final city = ref.watch(selectedCityProvider);
       final String logicalKey =
           _currentCarouselKey ?? _buildCarouselKey(widget.providerParams);
       final String wrapperKey =
           'wrapper_${widget.heroPrefix}_${city?.id ?? 'none'}_${logicalKey}_$_revision';
 
-      // 2. Données
-      final paginationState =
-      ref.watch(widget.paginationProvider(widget.providerParams));
+      // 2) Données
+      final paginationState = ref.watch(widget.paginationProvider(widget.providerParams));
 
-      final experiences = paginationState.items.isNotEmpty
+      // -> Si pas d’items T1, on affiche le fallback/préload immédiat (0 skeleton)
+      final itemsOrFallback = paginationState.items.isNotEmpty
           ? paginationState.items
           : widget.fallbackExperiences;
 
-      if ((experiences?.isEmpty ?? true) && !paginationState.isLoading) {
+      // -> Loading effectif UNIQUEMENT si on n’utilise pas le fallback
+      final effectiveIsLoading = paginationState.isLoading &&
+          (itemsOrFallback == paginationState.items);
+
+      if ((itemsOrFallback?.isEmpty ?? true) && !effectiveIsLoading) {
         return const SizedBox.shrink();
       }
 
-      // ⚠️ Si le carrousel a déjà défilé ET qu’il redevient visible,
-      // on remplace le ScrollController pour qu’il reparte à 0 sans frame intermédiaire
-      if (_hasScrolled && _scrollController.hasClients && _scrollController.offset != 0.0) {
-        _scrollController.removeListener(() {});   // retire l’ancien listener
-        _scrollController.dispose();
-        _scrollController = InfiniteScrollController(initialItem: 0);
-        _hasScrolled = false;                      // reset le flag
-        _revision++;                   // 🔑 force une clé unique => rebuild complet
-
-      }
-
-      // 3. Carrousel
+      // 3) Carrousel
       final carousel = GenericExperienceCarousel(
         key: ValueKey(wrapperKey),
         title: widget.title,
-        experiences: experiences,
-        isLoading: paginationState.isLoading,
+        experiences: itemsOrFallback,
+        isLoading: effectiveIsLoading, // 👈 évite le skeleton si fallback affiché
         errorMessage: paginationState.error,
         heroPrefix: '${widget.heroPrefix}_$logicalKey',
         openBuilder: widget.openBuilder,
         showDistance: widget.showDistance,
-        onLoadMore: _loadMoreExperiences,
+        onLoadMore: paginationState.hasMore ? _loadMoreExperiences : null,
         onSeeAllPressed: widget.onSeeAllPressed,
         scrollController: _scrollController,
         uniqueKey: '${city?.id ?? "none"}_${logicalKey}_${widget.title}_$_revision',
       );
 
-      // 4. Masque 1 frame (anti-flash)
+      // 4) Masque 1 frame (anti-flash)
       return Padding(
         padding: const EdgeInsets.only(bottom: 4.0),
         child: AnimatedOpacity(
@@ -235,7 +225,7 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
         ),
       );
     } catch (e) {
-      // 5. Fallback
+      // 5) Fallback dur
       final cityId = ref.read(selectedCityProvider)?.id ?? 'none';
       final String logicalKey =
           _currentCarouselKey ?? _buildCarouselKey(widget.providerParams);
@@ -254,13 +244,9 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
           showDistance: widget.showDistance,
           onSeeAllPressed: widget.onSeeAllPressed,
           scrollController: _scrollController,
-
-          // clé unique : ville + logicalKey + titre + révision
           uniqueKey: '${cityId}_${logicalKey}_${widget.title}_$_revision',
         ),
       );
-
-
     }
   }
 
@@ -311,8 +297,6 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
       print('❌ _attemptPreloadInjection: $e');
     }
   }
-
-
 
 
   /// ✅ T2 LAZY LOADING (append)
@@ -409,7 +393,6 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
   }
 
 
-
   /// 🔑 Clé preload alignée avec PreloadController
   String _buildCarouselKey(dynamic params) {
     switch (widget.carouselContext) {
@@ -484,7 +467,6 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
 
 
   void _wireT1Listener() {
-    // détacher l’ancien listener s’il existe
     _t1Sub?.close();
 
     _t1Sub = ref.listenManual<PaginationState<ExperienceItem>>(
@@ -492,19 +474,14 @@ class _ExperienceCarouselWrapperState extends ConsumerState<ExperienceCarouselWr
           (previous, next) async {
         if (!mounted) return;
 
-        // Détection T0 -> T1
-        if (previous != null && !previous.isPartial && next.isPartial) {
-          if (_t1InFlight) return; // déjà un append en cours
+        // Détection "injection T0 partielle" => append immédiat (T1)
+        final wasPartialBefore = previous?.isPartial ?? false;
+        if (!wasPartialBefore && next.isPartial && !next.isLoading && next.hasMore) {
+          if (_t1InFlight) return;
           _t1InFlight = true;
           try {
-            final controller =
-            ref.read(widget.paginationProvider(widget.providerParams).notifier);
-            final state = ref.read(widget.paginationProvider(widget.providerParams));
-
-            // Append-only si éligible
-            if (state.isPartial && !state.isLoading && !state.isLoadingMore && state.hasMore) {
-              await controller.loadMore();
-            }
+            final controller = ref.read(widget.paginationProvider(widget.providerParams).notifier);
+            await controller.loadMore();
           } catch (_) {
             // ignore
           } finally {
