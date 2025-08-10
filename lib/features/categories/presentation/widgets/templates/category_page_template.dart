@@ -79,6 +79,8 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
 
   // Gestion offset via PageStorage (persiste entre reconstructions)
   double _initialOffset = 0.0;
+  bool _usedHandoffOffset = false;
+  bool _suppressRestoreOnce = false;
 
   // Écoute changement de ville pour déclencher T3
   ProviderSubscription<City?>? _citySub;
@@ -90,12 +92,19 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
     _tabScrollController = ScrollController();
     _subcategoryScrollController = ScrollController();
     _previousCategory = null;
-    // Restaurer offset: par catégorie si dispo, sinon dernier global
-    _initialOffset = _readStoredOffsetFor(widget.currentCategory.id) ??
-        _readLastGlobalOffset() ??
-        0.0;
+    // Restaurer offset avec priorité au handoff depuis la catégorie précédente
+    final handoff = _consumeHandoffOffsetFor(widget.currentCategory.id);
+    if (handoff != null) {
+      _initialOffset = handoff;
+      _usedHandoffOffset = true;
+      _suppressRestoreOnce = true; // désactive la restauration PageStorage pour 1 frame
+    } else {
+      // Ne pas restaurer par catégorie; utiliser seulement la dernière position globale
+      _initialOffset = _readLastGlobalOffset() ?? 0.0;
+    }
     _verticalController = ScrollController(
-      keepScrollOffset: true,
+      // Désactiver la persistance automatique par PageStorage
+      keepScrollOffset: false,
       initialScrollOffset: _initialOffset,
     );
     _categoryTabKeys.addAll(
@@ -133,14 +142,9 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
   void dispose() {
     _citySub?.close();
     try {
-      // Sauvegarder offset courant pour la catégorie active
+      // Sauvegarder uniquement l'offset global courant (pas par catégorie)
       if (_verticalController.hasClients) {
         final bucket = PageStorage.of(context);
-        bucket?.writeState(
-          context,
-          _verticalController.position.pixels,
-          identifier: 'offset_${widget.currentCategory.id}',
-        );
         bucket?.writeState(
           context,
           _verticalController.position.pixels,
@@ -181,6 +185,32 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
         _categoryTabKeys.addAll(
             List.generate(widget.allCategories.length, (_) => GlobalKey())
         );
+      }
+
+      // Appliquer un handoff d'offset si fourni pour éviter le flash et forcer la parité visuelle
+      final double? handoff = _consumeHandoffOffsetFor(widget.currentCategory.id);
+      if (handoff != null) {
+        // Appliquer immédiatement l'offset pour éviter tout premier paint à l'ancienne position
+        if (_verticalController.hasClients) {
+          final max = _verticalController.position.maxScrollExtent;
+          final clamped = handoff.clamp(0.0, max);
+          if ((_verticalController.position.pixels - clamped).abs() > 0.5) {
+            _verticalController.jumpTo(clamped);
+          }
+          _isHeaderScrolled = clamped > 150.0;
+        } else {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            if (_verticalController.hasClients) {
+              final max = _verticalController.position.maxScrollExtent;
+              final clamped = handoff.clamp(0.0, max);
+              if ((_verticalController.position.pixels - clamped).abs() > 0.5) {
+                _verticalController.jumpTo(clamped);
+              }
+              _isHeaderScrolled = clamped > 150.0;
+            }
+          });
+        }
       }
 
       // Header scrolled recalculé sur prochaine frame via listener
@@ -258,17 +288,23 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         if (_verticalController.hasClients) {
-          final bucket = PageStorage.of(context);
-          final stored = _readStoredOffsetFor(widget.currentCategory.id) ?? _readLastGlobalOffset();
-          if (stored != null) {
-            final max = _verticalController.position.maxScrollExtent;
-            final clamped = stored.clamp(0.0, max);
-            if ((_verticalController.position.pixels - clamped).abs() > 0.5) {
-              _verticalController.jumpTo(clamped);
+          // Si on a utilisé un handoff, ne pas rejouer une restauration qui causerait un flash
+          if (!_usedHandoffOffset) {
+            final stored = _readLastGlobalOffset();
+            if (stored != null) {
+              final max = _verticalController.position.maxScrollExtent;
+              final clamped = stored.clamp(0.0, max);
+              if ((_verticalController.position.pixels - clamped).abs() > 0.5) {
+                _verticalController.jumpTo(clamped);
+              }
+              setState(() {
+                _isHeaderScrolled = clamped > 150.0;
+              });
             }
-            setState(() {
-              _isHeaderScrolled = clamped > 150.0;
-            });
+          }
+          // lever le suppression flag après la première frame
+          if (_suppressRestoreOnce) {
+            setState(() => _suppressRestoreOnce = false);
           }
         }
       });
@@ -310,6 +346,20 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
       _isAnimating = true;
       _previousCategory = widget.currentCategory;
     });
+
+    // 0) Synchroniser l'offset de la catégorie cible avec l'offset courant (parité visuelle)
+    try {
+      final double currentOffset = _verticalController.hasClients
+          ? _verticalController.position.pixels
+          : 0.0;
+      final bucket = PageStorage.of(context);
+      // Stocker un handoff dédié à la catégorie cible (consommé au prochain init)
+      bucket?.writeState(
+        context,
+        currentOffset,
+        identifier: 'handoff_offset_${category.id}',
+      );
+    } catch (_) {}
 
     // ✅ 1) Récupérer header préchargé ou fallback
     final preloadData = ref.read(preloadControllerProvider);
@@ -434,14 +484,9 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
                 setState(() => _isHeaderScrolled = isScrolled);
               }
 
-                // Mémoriser offsets (par catégorie + global) dans PageStorage
+                // Mémoriser uniquement l'offset global dans PageStorage
                 final bucket = PageStorage.of(context);
                 if (bucket != null) {
-                  bucket.writeState(
-                    context,
-                    notification.metrics.pixels,
-                    identifier: 'offset_${widget.currentCategory.id}',
-                  );
                   bucket.writeState(
                     context,
                     notification.metrics.pixels,
@@ -452,7 +497,8 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
             return false;
           },
           child: CustomScrollView(
-              key: PageStorageKey('category_scroll_${widget.currentCategory.id}'),
+              // Unifier la clé pour éviter une restauration par catégorie
+              key: const PageStorageKey('category_scroll_global'),
             controller: _verticalController, // contrôleur dédié
             primary: false,                  // sinon le PrimaryScrollController reprend la main
             physics: scrollPhysics,
@@ -583,6 +629,22 @@ class _CategoryPageTemplateState extends ConsumerState<CategoryPageTemplate>
     try {
       final bucket = PageStorage.of(context);
       final value = bucket?.readState(context, identifier: 'last_global_offset');
+      if (value is double) return value;
+      if (value is num) return value.toDouble();
+    } catch (_) {}
+    return null;
+  }
+
+  // Consomme et supprime le handoff offset si présent pour éviter un second jump (flash)
+  double? _consumeHandoffOffsetFor(String categoryId) {
+    try {
+      final bucket = PageStorage.of(context);
+      final id = 'handoff_offset_${categoryId}';
+      final value = bucket?.readState(context, identifier: id);
+      if (value != null) {
+        // effacer après lecture
+        bucket?.writeState(context, null, identifier: id);
+      }
       if (value is double) return value;
       if (value is num) return value.toDouble();
     } catch (_) {}
