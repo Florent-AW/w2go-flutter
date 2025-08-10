@@ -94,10 +94,8 @@ class _InfiniteImageCarouselState extends State<InfiniteImageCarousel>
     return Hero(
       tag: tag,
       createRectTween: (b, e) => viewportClampedRectTween(b, e, context),
-      // ✅ NOUVEAU placeholder : image du premier slide au lieu de transparent
-      placeholderBuilder: (_, __, ___) => Image(
-        image: CachingImageProvider.of(widget.imageUrls.first),
-        fit: BoxFit.cover,
+      // ✅ Placeholder neutre pendant le vol pour éviter tout double affichage
+      placeholderBuilder: (_, __, ___) => SizedBox(
         width: double.infinity,
         height: widget.height,
       ),

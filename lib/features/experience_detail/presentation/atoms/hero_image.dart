@@ -47,14 +47,8 @@ class HeroImage extends StatelessWidget {
           },
         );
       },
-      // ✅ EXPERT : placeholderBuilder avec même provider
-      placeholderBuilder: (_, __, ___) => Image(
-        image: CachingImageProvider.of(url),
-        fit: fit,
-        gaplessPlayback: true,
-        width: width,
-        height: height,
-      ),
+      // ✅ Place un placeholder neutre pendant le vol pour éviter l'apparition anticipée
+      placeholderBuilder: (_, __, ___) => const SizedBox.expand(),
       child: Image(
         image: CachingImageProvider.of(url),
         fit: fit,
