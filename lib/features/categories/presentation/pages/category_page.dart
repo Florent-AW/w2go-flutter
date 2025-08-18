@@ -88,7 +88,9 @@ class CategoryPage extends ConsumerWidget {
               );
               ref.read(selectedCategoryProvider.notifier).state = fullCategory;
             },
-            onSearchTap: () {},
+            onSearchTap: () {
+              Navigator.of(context).pushNamed('/search/terms');
+            },
             openBuilder: (context, action, activity) {
               final experienceItem = ExperienceItem.activity(activity);
               return ExperienceDetailPage(

@@ -18,6 +18,8 @@ class RouteNames {
   static const String eventDetails = '/event-details';
   static const String eventDetailsWithId = '/event-details/:id';
   static const String search = '/search';
+  static const String termsSearch = '/search/terms';
+  static const String termsResults = '/search/terms/results';
   static const String city = '/city';
   static const String cityWithId = '/city/:id';
 

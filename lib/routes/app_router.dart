@@ -14,6 +14,9 @@ import '../core/domain/models/activity/search/searchable_activity.dart';
 import '../core/domain/models/activity/base/activity_base.dart';
 import '../core/domain/models/event/search/searchable_event.dart';
 import '../core/domain/models/event/base/event_base.dart';
+import '../search_test_page.dart';
+import '../features/terms_search/presentation/pages/terms_search_page.dart';
+import '../features/terms_search/presentation/pages/terms_results_page.dart';
 import 'route_names.dart';
 import 'flow_manager.dart';
 
@@ -100,26 +103,25 @@ class AppRouter {
           settings: settings,
         );
 
-      // ❌ DÉSACTIVÉ : Ancien système LoadingRoute
-      // case '/loading':
-      //   final Map args = settings.arguments as Map? ?? {};
-      //   final city = args['city'];
-      //   final targetPageType = args['targetPageType'] as String? ?? 'city';
-      //
-      //   if (city == null) {
-      //     return MaterialPageRoute(
-      //       builder: (_) => const WelcomePage(),
-      //       settings: settings,
-      //     );
-      //   }
-      //
-      //   return MaterialPageRoute(
-      //     builder: (_) => LoadingRoute(
-      //       targetCity: city,
-      //       targetPageType: targetPageType,
-      //     ),
-      //     settings: settings,
-      //   );
+      // ✅ MVP: Terms search and results
+      case RouteNames.termsSearch:
+        return MaterialPageRoute(
+          builder: (_) => const TermsSearchPage(),
+          settings: settings,
+        );
+      case RouteNames.termsResults:
+        final args = (settings.arguments as Map<String, dynamic>?);
+        return MaterialPageRoute(
+          builder: (_) => TermsResultsPage(
+            conceptId: args?['conceptId'] ?? '',
+            conceptType: args?['conceptType'] ?? '',
+            cityName: args?['cityName'] ?? '',
+            radiusKm: (args?['radiusKm'] as num?)?.toDouble() ?? 50,
+          ),
+          settings: settings,
+        );
+
+
 
       default:
       // Gestion des routes avec ID de catégorie

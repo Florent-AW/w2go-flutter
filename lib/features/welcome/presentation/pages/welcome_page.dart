@@ -2,10 +2,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import '../../../../core/theme/app_dimensions.dart';
 import '../../../../core/theme/components/atoms/app_logo.dart';
 import '../widgets/molecules/welcome_background.dart';
 import '../widgets/organisms/welcome_form.dart';
+import '../../../../routes/route_names.dart';
+
 
 class WelcomePage extends ConsumerWidget {
   // Déclarer la clé comme statique
@@ -59,4 +62,6 @@ class WelcomePage extends ConsumerWidget {
       ),
     );
   }
+
+
 }

@@ -26,6 +26,8 @@ class FlowManager {
     final routesRequiringCity = [
       RouteNames.home,
       RouteNames.search,
+      RouteNames.termsSearch,
+      RouteNames.termsResults,
       RouteNames.category,
       RouteNames.activityDetails,
       RouteNames.tripTest,

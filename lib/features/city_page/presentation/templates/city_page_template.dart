@@ -7,6 +7,7 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_dimensions.dart';
 import '../../../../../core/theme/components/organisms/app_header.dart';
 import '../../../../../core/domain/models/shared/experience_item.dart';
+import '../../../../routes/route_names.dart';
 import '../../../search/application/state/city_selection_state.dart';
 import '../../../shared_ui/presentation/widgets/organisms/generic_experience_carousel.dart';
 import '../../../shared_ui/presentation/widgets/molecules/experience_carousel_wrapper.dart';
@@ -368,8 +369,7 @@ class _CityPageTemplateState extends ConsumerState<CityPageTemplate> {
 
   /// Gère la recherche dans la ville
   void _onSearchTap(BuildContext context) {
-    // TODO: Navigation vers page de recherche avec ville pré-sélectionnée
-    print('🔍 Recherche dans la ville');
+    Navigator.of(context).pushNamed(RouteNames.termsSearch);
   }
 
 }

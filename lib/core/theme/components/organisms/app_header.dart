@@ -60,7 +60,7 @@ class AppHeader extends StatelessWidget {
           // Recherche à droite
           SearchButton(
             text: searchText,
-            onTap: onSearchTap ?? () => print('Recherche tappée'),
+            onTap: onSearchTap ?? () => Navigator.of(context).pushNamed('/search/terms'),
           ),
         ],
       ),
