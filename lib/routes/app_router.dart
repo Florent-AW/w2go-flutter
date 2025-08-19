@@ -110,14 +110,8 @@ class AppRouter {
           settings: settings,
         );
       case RouteNames.termsResults:
-        final args = (settings.arguments as Map<String, dynamic>?);
         return MaterialPageRoute(
-          builder: (_) => TermsResultsPage(
-            conceptId: args?['conceptId'] ?? '',
-            conceptType: args?['conceptType'] ?? '',
-            cityName: args?['cityName'] ?? '',
-            radiusKm: (args?['radiusKm'] as num?)?.toDouble() ?? 50,
-          ),
+          builder: (_) => const TermsResultsPage(),
           settings: settings,
         );
 

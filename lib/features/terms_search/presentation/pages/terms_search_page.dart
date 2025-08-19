@@ -9,6 +9,7 @@ import '../widgets/terms_suggestions_list.dart';
 import '../../../search/application/state/city_selection_state.dart';
 import '../../../../routes/route_names.dart';
 import '../../../../core/domain/models/search/term_suggestion.dart';
+import '../../../../core/domain/ports/providers/search/terms_suggestion_providers.dart';
 
 class TermsSearchPage extends ConsumerStatefulWidget {
   const TermsSearchPage({super.key});
@@ -19,6 +20,44 @@ class TermsSearchPage extends ConsumerStatefulWidget {
 
 class _TermsSearchPageState extends ConsumerState<TermsSearchPage> {
   final _controller = TextEditingController();
+
+  Future<void> _openTermDirect(String term) async {
+    final city = ref.read(selectedCityProvider);
+    if (city == null) return;
+    try {
+      // Use suggestion port to resolve the term to a concept (limit 1)
+      final port = ref.read(termsSuggestionPortProvider);
+      final suggestions = await port.suggest(
+        term,
+        lat: city.lat,
+        lon: city.lon,
+        radiusKm: 50,
+        lang: 'fr',
+        limit: 1,
+      );
+      if (suggestions.isNotEmpty) {
+        // Reuse existing navigation flow
+        await ref.read(termsSearchNotifierProvider.notifier).onSuggestionTapped(suggestions.first);
+        if (!mounted) return;
+        Navigator.of(context).pushNamed(
+          RouteNames.termsResults,
+          arguments: {
+            'conceptId': suggestions.first.conceptId,
+            'conceptType': suggestions.first.conceptType,
+            'title': term.isEmpty ? '' : term[0].toUpperCase() + term.substring(1),
+            'radiusKm': 50.0,
+          },
+        );
+        return;
+      }
+    } catch (_) {
+      // Fallback to regular query flow below
+    }
+    // Fallback: populate the input and trigger suggestions
+    final capitalized = term.isEmpty ? '' : term[0].toUpperCase() + term.substring(1);
+    _controller.text = capitalized;
+    ref.read(termsSearchNotifierProvider.notifier).onQueryChanged(term);
+  }
 
   @override
   void dispose() {
@@ -35,7 +74,7 @@ class _TermsSearchPageState extends ConsumerState<TermsSearchPage> {
       arguments: {
         'conceptId': s.conceptId,
         'conceptType': s.conceptType,
-        'cityName': city.cityName,
+        'title': s.term,
         'radiusKm': 50.0,
       },
     );
@@ -53,7 +92,17 @@ class _TermsSearchPageState extends ConsumerState<TermsSearchPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          TermsSearchInput(controller: _controller, onChanged: ref.read(termsSearchNotifierProvider.notifier).onQueryChanged),
+          TermsSearchInput(controller: _controller, onChanged: (v) {
+            // Capitalize first letter in UI while preserving query state
+            if (v.isNotEmpty) {
+              final c = v[0].toUpperCase() + v.substring(1);
+              if (c != _controller.text) {
+                final sel = _controller.selection;
+                _controller.value = TextEditingValue(text: c, selection: sel);
+              }
+            }
+            ref.read(termsSearchNotifierProvider.notifier).onQueryChanged(v);
+          }),
           const SizedBox(height: 12),
           if (state.status == TermsSearchStatus.error && state.error != null)
             Card(
@@ -87,11 +136,8 @@ class _TermsSearchPageState extends ConsumerState<TermsSearchPage> {
                   runSpacing: 8,
                   children: state.recentTerms
                       .map((t) => ActionChip(
-                            label: Text(t),
-                            onPressed: () {
-                              _controller.text = t;
-                              ref.read(termsSearchNotifierProvider.notifier).onQueryChanged(t);
-                            },
+                            label: Text(t.isEmpty ? '' : t[0].toUpperCase() + t.substring(1)),
+                            onPressed: () => _openTermDirect(t),
                           ))
                       .toList(),
                 ),

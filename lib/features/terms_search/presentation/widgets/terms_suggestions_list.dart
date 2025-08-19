@@ -26,9 +26,8 @@ class TermsSuggestionsList extends StatelessWidget {
                 (s.term.isNotEmpty ? s.term[0] : '?').toUpperCase(),
               ),
             ),
-            title: Text(s.term),
-            subtitle: Text('Type: ${s.conceptType} • Popularité: ${s.popularity}'),
-            trailing: Chip(label: Text(s.conceptType)),
+            title: Text(s.term.isEmpty ? '' : s.term[0].toUpperCase() + s.term.substring(1)),
+            // Simplify item: user only needs the term
             onTap: () => onTap(s),
           ),
         );
