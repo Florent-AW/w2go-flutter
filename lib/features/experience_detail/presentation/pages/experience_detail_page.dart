@@ -11,6 +11,7 @@ import '../organisms/experience_description_panel.dart';
 import '../organisms/activity_recommendations_section.dart';
 import '../organisms/experience_floating_action_bar.dart';
 import '../organisms/experience_top_bar.dart';
+import '../organisms/experience_top_bar_favorites.dart';
 import '../../application/providers/experience_detail_providers.dart';
 
 /// ✅ VERSION SIMPLE : Page de détail qui marche avec Hero classique
@@ -178,14 +179,17 @@ class _ExperienceDetailPageState extends ConsumerState<ExperienceDetailPage> {
               categoryName: widget.experienceItem.categoryName ?? '',
               onBack: widget.onClose,
               onCategoryTap: widget.onClose,
-              isFavorite: false, // TODO: Implémenter state favori
-              onFavoritePressed: () {
-                // TODO: Implémenter fonctionnalité favori
-                print('🤍 Favori pressed - TODO: Implémenter');
-              },
+              isFavorite: false, // kept but replaced by overlay button below
+              onFavoritePressed: null,
               visible: true, // ✅ Toujours visible maintenant
               showBackground: _showTopBar,
             ),
+          ),
+          // Overlay favorite button wired to repository (keeps atomic structure)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            right: 16,
+            child: ExperienceTopBarFavorites(experienceItem: widget.experienceItem),
           ),
         ],
       ),

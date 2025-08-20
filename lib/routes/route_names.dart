@@ -22,6 +22,7 @@ class RouteNames {
   static const String termsResults = '/search/terms/results';
   static const String city = '/city';
   static const String cityWithId = '/city/:id';
+  static const String favorites = '/favorites';
 
 // Méthode utilitaire pour générer une route de ville avec un ID spécifique
   static String getCityRoute(String cityId) {

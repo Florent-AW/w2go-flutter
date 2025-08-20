@@ -17,6 +17,7 @@ import '../../../../../core/domain/models/activity/base/activity_base.dart';
 import '../../../../../core/domain/ports/providers/search/activity_distance_manager_providers.dart';
 import '../../../../search/application/state/city_selection_state.dart';
 import '../molecules/featured_experience_card.dart';
+import '../molecules/experience_card_with_favorite.dart';
 
 /// Widget métier pour afficher des carrousels d'expériences (activités + événements)
 ///
@@ -225,14 +226,13 @@ class _GenericExperienceCarouselState extends ConsumerState<GenericExperienceCar
             final heroTag = widget.heroPrefix != null
                 ? 'activity-hero-${xp.id}-${widget.heroPrefix}'
                 : 'activity-hero-${xp.id}-${widget.title.toLowerCase()}';
-            return FeaturedExperienceCard(
+            return ExperienceCardWithFavorite(
               key: ValueKey(heroTag),
               heroTag: heroTag,
               width: cardWidth,
               experience: xp,
               overrideDistance: dist,
               showDistance: widget.showDistance,
-              isFavorite: false,
               showSubcategory: true,
               onTap: () => _handleExperienceTap(context, xp, heroTag, index),
             );

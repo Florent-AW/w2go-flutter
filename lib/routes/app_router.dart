@@ -8,13 +8,11 @@ import '../features/city_page/presentation/pages/city_page.dart';
 import '../features/experience_detail/presentation/pages/experience_detail_page.dart';
 import '../features/shared_ui/presentation/widgets/organisms/generic_bottom_bar.dart';
 import '../features/home/presentation/pages/home_shell.dart';
-import '../features/preload/presentation/loading_route.dart';
 import '../core/domain/models/shared/experience_item.dart';
 import '../core/domain/models/activity/search/searchable_activity.dart';
 import '../core/domain/models/activity/base/activity_base.dart';
 import '../core/domain/models/event/search/searchable_event.dart';
 import '../core/domain/models/event/base/event_base.dart';
-import '../search_test_page.dart';
 import '../features/terms_search/presentation/pages/terms_search_page.dart';
 import '../features/terms_search/presentation/pages/terms_results_page.dart';
 import 'route_names.dart';
@@ -96,6 +94,13 @@ class AppRouter {
           settings: settings,
         );
 
+      // ✅ Nouveau cas pour /home → HomeShell (onglet Explorer par défaut)
+      case RouteNames.home:
+        return MaterialPageRoute(
+          builder: (_) => const HomeShell(initialTab: BottomNavTab.explorer),
+          settings: settings,
+        );
+
 // ✅ NOUVEAU cas pour /city
       case RouteNames.city:
         return MaterialPageRoute(
@@ -112,6 +117,12 @@ class AppRouter {
       case RouteNames.termsResults:
         return MaterialPageRoute(
           builder: (_) => const TermsResultsPage(),
+          settings: settings,
+        );
+
+      case RouteNames.favorites:
+        return MaterialPageRoute(
+          builder: (_) => const HomeShell(initialTab: BottomNavTab.favoris),
           settings: settings,
         );
 

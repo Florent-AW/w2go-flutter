@@ -6,6 +6,7 @@ import '../../search/application/state/city_selection_state.dart';
 import '../../../core/domain/models/search/result_section.dart';
 import '../../../core/domain/models/search/concept_types.dart';
 import '../../../core/domain/ports/providers/search/activities_by_concept_sections_provider.dart';
+import '../../../core/domain/ports/providers/repositories/repository_providers.dart';
 
 enum TermsResultsSectionsStatus { idle, loading, success, empty, error }
 
@@ -79,6 +80,20 @@ class TermsResultsSectionsNotifier extends StateNotifier<TermsResultsSectionsSta
         status: sections.isEmpty ? TermsResultsSectionsStatus.empty : TermsResultsSectionsStatus.success,
         sections: sections,
       );
+
+      // Write to search history after success
+      if (sections.isNotEmpty) {
+        final history = _ref.read(searchHistoryRepositoryProvider);
+        await history.addTermsExecution(
+          conceptId: args.conceptId,
+          conceptType: args.conceptType.asParam,
+          termTitle: args.title,
+          cityId: null,
+          cityName: city.cityName,
+          lat: city.lat,
+          lon: city.lon,
+        );
+      }
     } catch (e) {
       if (_requestId != requestId) return;
       state = state.copyWith(status: TermsResultsSectionsStatus.error, error: e.toString());

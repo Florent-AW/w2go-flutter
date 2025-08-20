@@ -14,6 +14,7 @@ import '../../../categories/application/state/categories_provider.dart';
 import '../../../../core/domain/models/shared/city_model.dart';
 import '../../../../core/common/utils/image_provider_factory.dart';
 import '../../../../core/domain/models/shared/category_model.dart';
+import '../../../favorites/presentation/pages/favorites_page.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
   /// Tab initial à afficher
@@ -408,9 +409,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       case BottomNavTab.visiter:
         return const CityPage();
       case BottomNavTab.favoris:
-        return const Scaffold(
-          body: Center(child: Text('🚧 Favoris - À implémenter')),
-        );
+        return const FavoritesPage();
       case BottomNavTab.profil:
         return const Scaffold(
           body: Center(child: Text('🚧 Profil - À implémenter')),
@@ -658,3 +657,5 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
 
 }
+
+// FavoritesPage is embedded directly as it manages its own Scaffold and AppBar
